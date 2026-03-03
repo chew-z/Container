@@ -25,6 +25,8 @@ EOF
 }
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+TIMEOUT=10  # seconds — container CLI hangs on corrupted/stopped containers
+
 is_managed() {
     local name="$1"
     for prefix in "${PREFIXES[@]}"; do
@@ -37,19 +39,26 @@ get_containers_json() {
     container list --all --format json 2>/dev/null || echo "[]"
 }
 
+# Cache the JSON once per invocation — avoids repeated `container list` calls
+CONTAINERS_JSON=""
+cached_containers_json() {
+    if [[ -z "$CONTAINERS_JSON" ]]; then
+        CONTAINERS_JSON="$(get_containers_json)"
+    fi
+    echo "$CONTAINERS_JSON"
+}
+
 get_managed_containers() {
-    get_containers_json | jq -r '.[].configuration.id' | while IFS= read -r name; do
+    cached_containers_json | jq -r '.[].configuration.id' | while IFS= read -r name; do
         is_managed "$name" && echo "$name"
     done
 }
 
 container_status() {
     local name="$1"
-    if container exec "$name" true 2>/dev/null; then
-        echo "running"
-    else
-        echo "stopped"
-    fi
+    local state
+    state="$(cached_containers_json | jq -r --arg n "$name" '.[] | select(.configuration.id == $n) | .status // "unknown"')"
+    echo "${state:-unknown}"
 }
 
 # ── List ──────────────────────────────────────────────────────────────────────
@@ -72,7 +81,7 @@ cmd_stop() {
     local target="${1:-}"
     if [[ -n "$target" ]]; then
         echo "Stopping: $target"
-        container stop "$target" 2>/dev/null && echo "  stopped" || echo "  already stopped"
+        timeout "$TIMEOUT" container stop "$target" 2>/dev/null && echo "  stopped" || echo "  already stopped"
         return
     fi
     local containers
@@ -83,7 +92,7 @@ cmd_stop() {
     fi
     while IFS= read -r name; do
         echo "Stopping: $name"
-        container stop "$name" 2>/dev/null && echo "  stopped" || echo "  already stopped"
+        timeout "$TIMEOUT" container stop "$name" 2>/dev/null && echo "  stopped" || echo "  already stopped"
     done <<< "$containers"
 }
 
@@ -91,12 +100,12 @@ cmd_stop() {
 cmd_remove() {
     local target="${1:-}"
     if [[ -n "$target" ]]; then
-        if container exec "$target" true 2>/dev/null; then
+        if [[ "$(container_status "$target")" == "running" ]]; then
             echo "Container '$target' is running. Stop it first (--stop $target)."
             return 1
         fi
         echo "Deleting: $target"
-        container delete "$target" 2>/dev/null && echo "  deleted" || echo "  failed"
+        timeout "$TIMEOUT" container delete "$target" 2>/dev/null && echo "  deleted" || echo "  failed (hung — may need: container delete --all --force)"
         return
     fi
     local containers
@@ -106,11 +115,11 @@ cmd_remove() {
         return
     fi
     while IFS= read -r name; do
-        if container exec "$name" true 2>/dev/null; then
+        if [[ "$(container_status "$name")" == "running" ]]; then
             echo "Skipping (running): $name"
         else
             echo "Deleting: $name"
-            container delete "$name" 2>/dev/null && echo "  deleted" || echo "  failed"
+            timeout "$TIMEOUT" container delete "$name" 2>/dev/null && echo "  deleted" || echo "  failed (hung — may need: container delete --all --force)"
         fi
     done <<< "$containers"
 }

@@ -19,12 +19,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     jq \
     ripgrep \
-    fd-find \
     fzf \
     openssh-client \
     procps \
     less \
  && rm -rf /var/lib/apt/lists/*
+
+# ── fd (upstream binary — Debian's fd-find installs as fdfind) ───────────
+ARG FD_VERSION=10.3.0
+RUN curl -fsSL "https://github.com/sharkdp/fd/releases/download/v${FD_VERSION}/fd-v${FD_VERSION}-aarch64-unknown-linux-gnu.tar.gz" \
+    | tar -xz -C /tmp && \
+    mv /tmp/fd-v${FD_VERSION}-aarch64-unknown-linux-gnu/fd /usr/local/bin/fd && \
+    rm -rf /tmp/fd-v${FD_VERSION}-aarch64-unknown-linux-gnu
 
 # ── sandbox user ─────────────────────────────────────────────────────────────
 RUN useradd -m -s /bin/bash sandbox
@@ -52,9 +58,10 @@ RUN mkdir -p /home/sandbox/.local/bin && \
         -o /home/sandbox/.local/bin/claude && \
     chmod +x /home/sandbox/.local/bin/claude
 
-# ── claude-agent-acp binary ─────────────────────────────────────────────────
-ARG CLAUDE_ACP_VERSION=v0.19.2
-RUN curl -fsSL "https://github.com/zed-industries/claude-agent-acp/releases/download/${CLAUDE_ACP_VERSION}/claude-agent-acp-linux-arm64.tar.gz" \
+# ── claude-agent-acp binary (resolves latest from GitHub at build time) ────
+RUN CLAUDE_ACP_VERSION=$(curl -fsSL "https://api.github.com/repos/zed-industries/claude-agent-acp/releases/latest" | jq -r '.tag_name') && \
+    echo "Downloading claude-agent-acp ${CLAUDE_ACP_VERSION} for linux-arm64..." && \
+    curl -fsSL "https://github.com/zed-industries/claude-agent-acp/releases/download/${CLAUDE_ACP_VERSION}/claude-agent-acp-linux-arm64.tar.gz" \
     | tar -xz -C /tmp && \
     mv /tmp/claude-agent-acp /home/sandbox/.local/bin/claude-agent-acp && \
     chmod +x /home/sandbox/.local/bin/claude-agent-acp

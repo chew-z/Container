@@ -122,14 +122,24 @@ CREDS_EOF
 chmod 600 /home/sandbox/.claude/.credentials.json"
     fi
     # Copy SSH keys and git config
+    # NOTE: Host SSH config references macOS-only agents (Secretive, Keychain)
+    # that don't exist in the container. We copy the raw keys and write a
+    # minimal config so SSH uses them directly.
     log "Setting up SSH keys and git config..."
     container exec "$CONTAINER_NAME" /bin/bash -c \
         'mkdir -p /home/sandbox/.ssh && \
          cp /mnt/in/home/.ssh/id_* /home/sandbox/.ssh/ 2>/dev/null || true && \
-         cp /mnt/in/home/.ssh/config /home/sandbox/.ssh/ 2>/dev/null || true && \
          chmod 700 /home/sandbox/.ssh && \
-         chmod 600 /home/sandbox/.ssh/* 2>/dev/null || true && \
+         chmod 600 /home/sandbox/.ssh/id_* 2>/dev/null || true && \
+         chmod 644 /home/sandbox/.ssh/id_*.pub 2>/dev/null || true && \
          ssh-keyscan -t ed25519 github.com >> /home/sandbox/.ssh/known_hosts 2>/dev/null && \
+         cat > /home/sandbox/.ssh/config << '\''SSHEOF'\''
+Host github.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+SSHEOF
+         chmod 600 /home/sandbox/.ssh/config && \
          cp /mnt/in/home/.gitconfig /home/sandbox/.gitconfig 2>/dev/null || true'
 }
 
@@ -203,7 +213,32 @@ ensure_container_running() {
     create_container
 }
 
+# ── Ensure Apple container system daemon is running ─────────────────────────
+ensure_container_system() {
+    if container system status &>/dev/null; then
+        log "Container system service is running."
+        return 0
+    fi
+
+    log "Container system service not running — starting it..."
+    container system start 2>&1
+
+    # Wait for daemon to become ready (up to 10s)
+    local retries=10
+    while (( retries-- > 0 )); do
+        if container system status &>/dev/null; then
+            log "Container system service started."
+            return 0
+        fi
+        sleep 1
+    done
+
+    log "ERROR: Container system service failed to start."
+    exit 1
+}
+
 # ── Main ──────────────────────────────────────────────────────────────────────
+ensure_container_system
 ensure_container_running
 
 # ── Environment for container exec ────────────────────────────────────────────
@@ -217,8 +252,16 @@ EXEC_ENV=(
     -e "ANTHROPIC_API_KEY="
     -e "GH_TOKEN=${GH_TOKEN}"
 )
+# NOTE: ANTHROPIC_API_KEY="" is intentional — forces Claude Code / ACP to use
+# OAuth (.credentials.json) instead of picking up an API key from the project's
+# .env file. Python scripts that need the API key should use
+# load_dotenv(override=True) to override this empty value.
 # Forward host env vars (typically set via Zed agent_servers.env config)
-for var in ANTHROPIC_BASE_URL API_TIMEOUT_MS \
+# NOTE: ANTHROPIC_BASE_URL is NOT forwarded here — it's set in Claude Code's
+# settings.json (copied into the container). Forwarding it as an env var would
+# leak the proxy URL into child processes (e.g. python scripts using the SDK
+# directly), causing 401s when they try to use a standard API key.
+for var in API_TIMEOUT_MS \
            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC \
            CLAUDE_CODE_SIMPLE DISABLE_NON_ESSENTIAL_MODEL_CALLS \
            MAX_THINKING_TOKENS; do
@@ -237,8 +280,16 @@ The workspace is bind-mounted read-write — every file change is visible to the
 
 ## Available Tools
 
-- git, gh (GitHub CLI), jq, ripgrep, fd, fzf, uv
-- openssh-client (SSH keys are pre-configured for github.com)
+- git, gh (GitHub CLI), jq, ripgrep, fd, fzf, curl, uv
+- SSH is configured for github.com (key-based auth)
+
+## Important Notes
+
+- All binaries you build or install are **Linux arm64** — they will not run on macOS.
+- \`ANTHROPIC_API_KEY\` is deliberately set to an empty string in this container so that
+  Claude Code uses OAuth authentication. If your Python scripts need the API key from
+  \`.env\`, you **must** use \`load_dotenv(override=True)\` — otherwise the empty env var
+  takes precedence and the key from \`.env\` is silently ignored.
 "
 
     # Detect Python project
@@ -246,6 +297,8 @@ The workspace is bind-mounted read-write — every file change is visible to the
           -f "${PROJECT}/setup.py" || -f "${PROJECT}/Pipfile" ]]; then
         content+="
 ## Python Environment
+
+System Python is managed by \`uv\`. Do NOT use \`pip\` directly — use \`uv pip\` instead.
 
 If \`.venv/\` exists, it was created on macOS and contains Mach-O binaries — do NOT use it.
 Create a Linux-native virtual environment:
@@ -256,7 +309,6 @@ uv pip install -r requirements.txt  # or: uv pip install -e .
 \`\`\`
 
 Use \`.venv-container\` (not \`.venv\`) to avoid conflicts with the host environment.
-All compiled C extensions (\`.so\` files) are Linux arm64 and will not run on macOS.
 "
     fi
 
