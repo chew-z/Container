@@ -1,0 +1,8 @@
+.DS_Store
+
+.env
+
+.claude/
+.github/
+.vscode/
+.mcp.json
