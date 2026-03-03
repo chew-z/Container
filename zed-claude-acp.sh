@@ -70,13 +70,22 @@ project_slug() {
 
 SLUG="$(project_slug "$PROJECT")"
 [[ -z "$SLUG" ]] && SLUG="sandbox"
-IMAGE="claudecode"
+IMAGE="claudecode-${CONTAINER_LANG:-python}"
 CONTAINER_NAME="zed-${SLUG}"
 
 # ── Extract OAuth credentials from macOS Keychain (full JSON blob) ────────────
 CLAUDE_CREDS="$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null || true)"
 if [[ -z "$CLAUDE_CREDS" ]]; then
     log "WARNING: Could not extract credentials from Keychain."
+fi
+
+# ── Extract GitHub CLI token from macOS Keychain ─────────────────────────────
+GH_TOKEN=""
+GH_TOKEN_RAW="$(security find-generic-password -s "gh:github.com" -w 2>/dev/null || true)"
+if [[ "$GH_TOKEN_RAW" == go-keyring-base64:* ]]; then
+    GH_TOKEN="$(echo "${GH_TOKEN_RAW#go-keyring-base64:}" | base64 -d)"
+elif [[ -n "$GH_TOKEN_RAW" ]]; then
+    GH_TOKEN="$GH_TOKEN_RAW"
 fi
 
 log "Project:   $PROJECT"
@@ -112,6 +121,16 @@ ${CLAUDE_CREDS}
 CREDS_EOF
 chmod 600 /home/sandbox/.claude/.credentials.json"
     fi
+    # Copy SSH keys and git config
+    log "Setting up SSH keys and git config..."
+    container exec "$CONTAINER_NAME" /bin/bash -c \
+        'mkdir -p /home/sandbox/.ssh && \
+         cp /mnt/in/home/.ssh/id_* /home/sandbox/.ssh/ 2>/dev/null || true && \
+         cp /mnt/in/home/.ssh/config /home/sandbox/.ssh/ 2>/dev/null || true && \
+         chmod 700 /home/sandbox/.ssh && \
+         chmod 600 /home/sandbox/.ssh/* 2>/dev/null || true && \
+         ssh-keyscan -t ed25519 github.com >> /home/sandbox/.ssh/known_hosts 2>/dev/null && \
+         cp /mnt/in/home/.gitconfig /home/sandbox/.gitconfig 2>/dev/null || true'
 }
 
 # ── Build watchdog command (replaces sleep infinity) ─────────────────────────
@@ -196,6 +215,7 @@ EXEC_ENV=(
     -e "HOME=/home/sandbox"
     -e "CLAUDE_CODE_SHELL=/bin/bash"
     -e "ANTHROPIC_API_KEY="
+    -e "GH_TOKEN=${GH_TOKEN}"
 )
 # Forward host env vars (typically set via Zed agent_servers.env config)
 for var in ANTHROPIC_BASE_URL API_TIMEOUT_MS \
@@ -204,6 +224,61 @@ for var in ANTHROPIC_BASE_URL API_TIMEOUT_MS \
            MAX_THINKING_TOKENS; do
     [[ -n "${!var:-}" ]] && EXEC_ENV+=(-e "${var}=${!var}")
 done
+
+# ── Generate CONTAINER.md for Claude Code context ────────────────────────────
+# Written to project dir (bind-mounted RW) so Claude reads it via CLAUDE.md reference.
+# Detects project language from files (pyproject.toml, go.mod, etc.).
+generate_container_md() {
+    local md="${PROJECT}/CONTAINER.md"
+    local content="# Container Environment (auto-generated)
+
+You are running inside a **Linux arm64** container (Debian bookworm), NOT macOS.
+The workspace is bind-mounted read-write — every file change is visible to the host and Zed immediately.
+
+## Available Tools
+
+- git, gh (GitHub CLI), jq, ripgrep, fd, fzf, uv
+- openssh-client (SSH keys are pre-configured for github.com)
+"
+
+    # Detect Python project
+    if [[ -f "${PROJECT}/pyproject.toml" || -f "${PROJECT}/requirements.txt" || \
+          -f "${PROJECT}/setup.py" || -f "${PROJECT}/Pipfile" ]]; then
+        content+="
+## Python Environment
+
+If \`.venv/\` exists, it was created on macOS and contains Mach-O binaries — do NOT use it.
+Create a Linux-native virtual environment:
+
+\`\`\`bash
+uv venv .venv-container && source .venv-container/bin/activate
+uv pip install -r requirements.txt  # or: uv pip install -e .
+\`\`\`
+
+Use \`.venv-container\` (not \`.venv\`) to avoid conflicts with the host environment.
+All compiled C extensions (\`.so\` files) are Linux arm64 and will not run on macOS.
+"
+    fi
+
+    # Detect Go project
+    if [[ -f "${PROJECT}/go.mod" ]]; then
+        content+="
+## Go Environment
+
+\`go build\` produces **Linux arm64** binaries that will not run on macOS.
+To avoid overwriting host binaries, use a platform-specific output directory:
+
+\`\`\`bash
+go build -o ./bin/linux/ .
+\`\`\`
+"
+    fi
+
+    echo "$content" > "$md"
+    log "Generated $md (detected: $(cd "$PROJECT" && ls pyproject.toml go.mod 2>/dev/null | tr '\n' ' ' || echo 'generic'))"
+}
+
+generate_container_md
 
 log "Attaching claude-agent-acp via exec..."
 exec container exec -i \

@@ -30,22 +30,87 @@ if [[ -n "${CLAUDE_CREDS:-}" ]]; then
     chmod 600 /home/sandbox/.claude/.credentials.json
 fi
 
-# ── 3. Copy workspace if in copy mode ────────────────────────────────────────
-if [[ "${SANDBOX_COPY_MODE:-0}" == "1" ]]; then
-    echo "[entrypoint] Copy mode: copying workspace..." >&2
-    mkdir -p /workspace
-    cp -rp /mnt/in/workspace/. /workspace/
+# ── 2.6 Copy SSH keys and git config from host ──────────────────────────────
+if [[ -d /mnt/in/home/.ssh ]]; then
+    echo "[entrypoint] Copying SSH keys..." >&2
+    mkdir -p /home/sandbox/.ssh
+    cp /mnt/in/home/.ssh/id_* /home/sandbox/.ssh/ 2>/dev/null || true
+    cp /mnt/in/home/.ssh/config /home/sandbox/.ssh/ 2>/dev/null || true
+    chmod 700 /home/sandbox/.ssh
+    chmod 600 /home/sandbox/.ssh/* 2>/dev/null || true
+    ssh-keyscan -t ed25519 github.com >> /home/sandbox/.ssh/known_hosts 2>/dev/null
+fi
+if [[ -f /mnt/in/home/.gitconfig ]]; then
+    echo "[entrypoint] Copying .gitconfig..." >&2
+    cp /mnt/in/home/.gitconfig /home/sandbox/.gitconfig
 fi
 
-# ── 4. Change to workspace ────────────────────────────────────────────────────
+# ── 3. Copy workspace if in copy mode ────────────────────────────────────────
+if [[ "${SANDBOX_COPY_MODE:-0}" == "1" ]]; then
+    echo "[entrypoint] Copy mode: copying workspace (filtering build artifacts)..." >&2
+    mkdir -p /workspace
+    tar -C /mnt/in/workspace \
+        --exclude='.venv' \
+        --exclude='venv' \
+        --exclude='node_modules' \
+        --exclude='__pycache__' \
+        --exclude='*.pyc' \
+        --exclude='.DS_Store' \
+        --exclude='.ruff_cache' \
+        --exclude='.mypy_cache' \
+        --exclude='.pytest_cache' \
+        --exclude='.fastembed_cache' \
+        --exclude='.vscode' \
+        --exclude='.github' \
+        --exclude='.codex' \
+        --exclude='.codanna' \
+        -cf - . | tar -C /workspace -xf -
+fi
+
+# ── 4. Generate CONTAINER.md ──────────────────────────────────────────────────
+# Dynamic context file so Claude knows it's in a Linux container.
+echo "[entrypoint] Generating CONTAINER.md..." >&2
+cat > /workspace/CONTAINER.md << 'CONTAINERMD'
+# Container Environment (auto-generated)
+
+You are running inside a **Linux arm64** container (Debian bookworm), NOT macOS.
+This is an isolated copy of the project — changes here do NOT affect the host.
+
+## Available Tools
+
+- git, gh (GitHub CLI), jq, ripgrep, fd, fzf, uv
+- openssh-client (SSH keys are pre-configured for github.com)
+
+## Python
+
+If this is a Python project, the host `.venv/` was excluded (macOS binaries).
+Create a fresh Linux virtual environment:
+
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install -r requirements.txt
+```
+
+## Go
+
+`go build` produces Linux arm64 binaries. This is an isolated container so there
+are no cross-platform concerns — build normally.
+
+## Build Artifacts
+
+All compiled binaries and native extensions are Linux arm64.
+This container is ephemeral — it is destroyed on exit.
+CONTAINERMD
+
+# ── 5. Change to workspace ──────────────────────────────────────────────────
 echo "[entrypoint] Starting Claude Code in /workspace..." >&2
 cd /workspace
 
-# ── 5. Verify claude exists ───────────────────────────────────────────────────
+# ── 6. Verify claude exists ───────────────────────────────────────────────────
 if ! command -v claude &>/dev/null; then
     echo "[entrypoint] ERROR: claude not found in PATH" >&2
     exit 1
 fi
 
-# ── 6. Exec claude with any passed arguments ─────────────────────────────────
+# ── 7. Exec claude with any passed arguments ─────────────────────────────────
 exec claude "$@"

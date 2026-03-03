@@ -1,0 +1,4 @@
+# Only Dockerfile and entrypoint.sh are needed in the build context
+*
+!Dockerfile
+!entrypoint.sh

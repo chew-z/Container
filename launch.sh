@@ -9,10 +9,11 @@ PROJECT="$PWD"
 REBUILD=0
 COPY_MODE=1
 CLAUDE_AUTO_UPDATE=0
+LANG_TARGET="${CONTAINER_LANG:-python}"
 EXTRA_CLAUDE_ARGS=()
 
-BUILD_CPUS="${BUILD_CPUS:-4}"
-BUILD_MEMORY="${BUILD_MEMORY:-12g}"
+BUILD_CPUS="${BUILD_CPUS:-2}"
+BUILD_MEMORY="${BUILD_MEMORY:-4g}"
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 usage() {
@@ -28,12 +29,14 @@ Options:
                            (default: directory containing this script)
   --rebuild                Rebuild the container image before running
   --update-claude          Allow Claude to auto-update inside the container
+  --lang LANG              Language target: python (default) or golang
   --rw                     Mount workspace read-write directly (live, no isolation)
   --                       Pass remaining arguments to claude inside the container
 
 Environment:
-  BUILD_CPUS               CPUs for builder (default: 4)
-  BUILD_MEMORY             Memory for builder (default: 12g)
+  CONTAINER_LANG           Language target (default: python)
+  BUILD_CPUS               CPUs for builder (default: 2)
+  BUILD_MEMORY             Memory for builder (default: 4g)
 EOF
 }
 
@@ -59,6 +62,10 @@ while [[ $# -gt 0 ]]; do
         --update-claude)
             CLAUDE_AUTO_UPDATE=1
             shift
+            ;;
+        --lang)
+            LANG_TARGET="${2:?--lang requires python or golang}"
+            shift 2
             ;;
         --rw)
             COPY_MODE=0
@@ -87,7 +94,7 @@ project_slug() {
 
 SLUG="$(project_slug "$PROJECT")"
 [[ -z "$SLUG" ]] && SLUG="sandbox"
-IMAGE="claudecode"
+IMAGE="claudecode-${LANG_TARGET}"
 CONTAINER_NAME="claude-${SLUG}"
 
 # ── Check image exists ────────────────────────────────────────────────────────
@@ -107,8 +114,8 @@ build_image() {
     ensure_system_running
     echo "==> Starting builder..."
     container builder start --cpus "$BUILD_CPUS" --memory "$BUILD_MEMORY"
-    echo "==> Building image: $IMAGE"
-    container build -t "$IMAGE" --arch arm64 "$TEMPLATE_DIR"
+    echo "==> Building image: $IMAGE (target: $LANG_TARGET)"
+    container build -t "$IMAGE" --target "$LANG_TARGET" --arch arm64 "$TEMPLATE_DIR"
     echo "==> Build complete."
 }
 
@@ -134,6 +141,15 @@ if [[ -z "$CLAUDE_CREDS" ]]; then
     echo "WARNING: Could not extract credentials from Keychain." >&2
 fi
 
+# ── Extract GitHub CLI token from macOS Keychain ─────────────────────────────
+GH_TOKEN=""
+GH_TOKEN_RAW="$(security find-generic-password -s "gh:github.com" -w 2>/dev/null || true)"
+if [[ "$GH_TOKEN_RAW" == go-keyring-base64:* ]]; then
+    GH_TOKEN="$(echo "${GH_TOKEN_RAW#go-keyring-base64:}" | base64 -d)"
+elif [[ -n "$GH_TOKEN_RAW" ]]; then
+    GH_TOKEN="$GH_TOKEN_RAW"
+fi
+
 # ── Run container ─────────────────────────────────────────────────────────────
 echo "==> Launching Claude Code for: $PROJECT"
 echo "==> Container: $CONTAINER_NAME"
@@ -149,5 +165,7 @@ exec container run -it --rm \
     -e "CLAUDE_CREDS=${CLAUDE_CREDS}" \
     -e "SANDBOX_COPY_MODE=${COPY_MODE}" \
     -e "CLAUDE_AUTO_UPDATE=${CLAUDE_AUTO_UPDATE}" \
+    -e "ANTHROPIC_API_KEY=" \
+    -e "GH_TOKEN=${GH_TOKEN}" \
     "$IMAGE" \
     "${EXTRA_CLAUDE_ARGS[@]+"${EXTRA_CLAUDE_ARGS[@]}"}"
