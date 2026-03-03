@@ -10,6 +10,11 @@
 set -euo pipefail
 
 LOG_FILE="/tmp/zed-claude-acp.log"
+
+# Redirect stderr to log file for the entire script lifetime.
+# This keeps Zed's stdio clean (it parses both stdout and stderr as JSON-RPC).
+# The final `exec container exec -i` inherits this, so claude-agent-acp's
+# debug output goes to the log file, not to Zed.
 exec 2>>"$LOG_FILE"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
@@ -110,7 +115,7 @@ setup_container_config() {
     container exec "$CONTAINER_NAME" /bin/bash -c \
         'mkdir -p /home/sandbox/.claude && \
          cp -a /mnt/in/claude_dir/. /home/sandbox/.claude/ && \
-         cp /mnt/in/home/.claude.json /home/sandbox/.claude.json 2>/dev/null || true'
+         cp /mnt/in/home/.claude.json /home/sandbox/.claude.json 2>/dev/null || true' >>"$LOG_FILE" 2>&1
     # Write credentials file (Linux plaintext fallback for Keychain)
     if [[ -n "${CLAUDE_CREDS:-}" ]]; then
         log "Writing credentials file into container..."
@@ -119,7 +124,7 @@ setup_container_config() {
              cat > /home/sandbox/.claude/.credentials.json << 'CREDS_EOF'
 ${CLAUDE_CREDS}
 CREDS_EOF
-chmod 600 /home/sandbox/.claude/.credentials.json"
+chmod 600 /home/sandbox/.claude/.credentials.json" >>"$LOG_FILE" 2>&1
     fi
     # Copy SSH keys and git config
     # NOTE: Host SSH config references macOS-only agents (Secretive, Keychain)
@@ -140,7 +145,7 @@ Host github.com
     IdentitiesOnly yes
 SSHEOF
          chmod 600 /home/sandbox/.ssh/config && \
-         cp /mnt/in/home/.gitconfig /home/sandbox/.gitconfig 2>/dev/null || true'
+         cp /mnt/in/home/.gitconfig /home/sandbox/.gitconfig 2>/dev/null || true' >>"$LOG_FILE" 2>&1
 }
 
 # ── Build watchdog command (replaces sleep infinity) ─────────────────────────
@@ -178,9 +183,9 @@ create_container() {
         -e "SANDBOX_COPY_MODE=${COPY_MODE}" \
         -e "CONTAINER_TTL=${CONTAINER_TTL}" \
         "$IMAGE" \
-        /bin/bash -c "$watchdog"
+        /bin/bash -c "$watchdog" >>"$LOG_FILE" 2>&1
 
-    container start "$CONTAINER_NAME"
+    container start "$CONTAINER_NAME" >>"$LOG_FILE" 2>&1
     log "Container started."
     setup_container_config
 }
@@ -188,14 +193,14 @@ create_container() {
 # ── Container lifecycle management ────────────────────────────────────────────
 ensure_container_running() {
     # Case 1: Container is already running — refresh credentials (tokens expire)
-    if container exec "$CONTAINER_NAME" true 2>/dev/null; then
+    if container exec "$CONTAINER_NAME" true &>/dev/null; then
         log "Container already running: $CONTAINER_NAME"
         setup_container_config
         return 0
     fi
 
     # Case 2: Container exists but is stopped — try to start it
-    if container start "$CONTAINER_NAME" 2>/dev/null; then
+    if container start "$CONTAINER_NAME" >>"$LOG_FILE" 2>&1; then
         log "Started existing container: $CONTAINER_NAME"
         sleep 1
         setup_container_config
@@ -203,13 +208,13 @@ ensure_container_running() {
     fi
 
     # Case 3: Container does not exist — create fresh
-    if create_container 2>/dev/null; then
+    if create_container >>"$LOG_FILE" 2>&1; then
         return 0
     fi
 
     # Case 4: Stale/broken container — force delete and recreate
     log "Removing stale container: $CONTAINER_NAME"
-    container delete --force "$CONTAINER_NAME" 2>/dev/null || true
+    container delete --force "$CONTAINER_NAME" >>"$LOG_FILE" 2>&1 || true
     create_container
 }
 
@@ -221,7 +226,7 @@ ensure_container_system() {
     fi
 
     log "Container system service not running — starting it..."
-    container system start 2>&1
+    container system start >>"$LOG_FILE" 2>&1
 
     # Wait for daemon to become ready (up to 10s)
     local retries=10
@@ -257,11 +262,11 @@ EXEC_ENV=(
 # .env file. Python scripts that need the API key should use
 # load_dotenv(override=True) to override this empty value.
 # Forward host env vars (typically set via Zed agent_servers.env config)
-# NOTE: ANTHROPIC_BASE_URL is NOT forwarded here — it's set in Claude Code's
-# settings.json (copied into the container). Forwarding it as an env var would
-# leak the proxy URL into child processes (e.g. python scripts using the SDK
-# directly), causing 401s when they try to use a standard API key.
-for var in API_TIMEOUT_MS \
+# NOTE: ANTHROPIC_BASE_URL is required as an env var — claude-agent-acp spawns
+# claude --cli which needs it to reach the auth proxy. It does leak into child
+# processes; Python scripts that use the SDK directly should set their own
+# base_url or unset ANTHROPIC_BASE_URL before calling the API.
+for var in ANTHROPIC_BASE_URL API_TIMEOUT_MS \
            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC \
            CLAUDE_CODE_SIMPLE DISABLE_NON_ESSENTIAL_MODEL_CALLS \
            MAX_THINKING_TOKENS; do
@@ -290,6 +295,10 @@ The workspace is bind-mounted read-write — every file change is visible to the
   Claude Code uses OAuth authentication. If your Python scripts need the API key from
   \`.env\`, you **must** use \`load_dotenv(override=True)\` — otherwise the empty env var
   takes precedence and the key from \`.env\` is silently ignored.
+- \`ANTHROPIC_BASE_URL\` is set to a custom proxy for Claude Code. Python scripts that
+  call the Anthropic API directly should either delete it from the environment
+  (\`os.environ.pop(\"ANTHROPIC_BASE_URL\", None)\`) or pass \`base_url\` explicitly to the
+  Anthropic client.
 "
 
     # Detect Python project
