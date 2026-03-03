@@ -80,19 +80,14 @@ done
 # ── Resolve paths ─────────────────────────────────────────────────────────────
 PROJECT="$(cd "$PROJECT" && pwd)"
 
-# ── Derive image name from project basename ───────────────────────────────────
-image_slug() {
-    basename "$1" \
-        | tr '[:upper:]' '[:lower:]' \
-        | tr -cs 'a-z0-9' '-' \
-        | sed 's/^-*//;s/-*$//'
+# ── Derive names from project basename ────────────────────────────────────────
+project_slug() {
+    basename "$1" | tr -cs 'a-zA-Z0-9._-' '-' | sed 's/^-*//;s/-*$//' | tr '[:upper:]' '[:lower:]'
 }
 
-SLUG="$(image_slug "$PROJECT")"
+SLUG="$(project_slug "$PROJECT")"
 [[ -z "$SLUG" ]] && SLUG="sandbox"
-IMAGE="claudecode-${SLUG}"
-
-# ── Derive container name ─────────────────────────────────────────────────────
+IMAGE="claudecode"
 CONTAINER_NAME="claude-${SLUG}"
 
 # ── Check image exists ────────────────────────────────────────────────────────

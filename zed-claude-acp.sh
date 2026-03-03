@@ -18,8 +18,7 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT="${PWD}"
 COPY_MODE=0
-
-IMAGE="claudecode-sandbox"
+CONTAINER_TTL="${CONTAINER_TTL:-1800}"  # idle timeout in seconds (default: 30 min, 0=forever)
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 usage() {
@@ -64,20 +63,15 @@ done
 # ── Resolve project path ──────────────────────────────────────────────────────
 PROJECT="$(cd "$PROJECT" && pwd)"
 
-# ── Derive container name from project basename ───────────────────────────────
-container_slug() {
-    basename "$1" \
-        | tr '[:upper:]' '[:lower:]' \
-        | tr -cs 'a-z0-9' '-' \
-        | sed 's/^-*//;s/-*$//'
+# ── Derive names from project basename ────────────────────────────────────────
+project_slug() {
+    basename "$1" | tr -cs 'a-zA-Z0-9._-' '-' | sed 's/^-*//;s/-*$//' | tr '[:upper:]' '[:lower:]'
 }
 
-SLUG="$(container_slug "$PROJECT")"
+SLUG="$(project_slug "$PROJECT")"
 [[ -z "$SLUG" ]] && SLUG="sandbox"
-CONTAINER_NAME="claude-acp-${SLUG}"
-
-# ── Derive image name from project slug (same convention as launch.sh) ────────
-IMAGE="claudecode-${SLUG}"
+IMAGE="claudecode"
+CONTAINER_NAME="zed-${SLUG}"
 
 # ── Extract OAuth credentials from macOS Keychain (full JSON blob) ────────────
 CLAUDE_CREDS="$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null || true)"
@@ -120,9 +114,32 @@ chmod 600 /home/sandbox/.claude/.credentials.json"
     fi
 }
 
+# ── Build watchdog command (replaces sleep infinity) ─────────────────────────
+# Monitors for claude-agent-acp process. If idle for CONTAINER_TTL seconds,
+# the container exits automatically. Set CONTAINER_TTL=0 for no timeout.
+build_watchdog_cmd() {
+    if [[ "$CONTAINER_TTL" == "0" ]]; then
+        echo "sleep infinity"
+    else
+        cat <<'WATCHDOG'
+idle=0; while true; do
+  sleep 60
+  if pgrep -x claude-agent-acp >/dev/null 2>&1; then
+    idle=0
+  else
+    idle=$((idle + 60))
+    if [ "$idle" -ge "$CONTAINER_TTL" ]; then exit 0; fi
+  fi
+done
+WATCHDOG
+    fi
+}
+
 # ── Create a new persistent container ────────────────────────────────────────
 create_container() {
-    log "Creating new persistent container: $CONTAINER_NAME"
+    log "Creating new persistent container: $CONTAINER_NAME (TTL=${CONTAINER_TTL}s)"
+    local watchdog
+    watchdog="$(build_watchdog_cmd)"
     container create \
         --name "$CONTAINER_NAME" \
         --arch arm64 \
@@ -130,8 +147,9 @@ create_container() {
         --mount "$CLAUDE_DIR_MOUNT" \
         --mount "$HOME_MOUNT" \
         -e "SANDBOX_COPY_MODE=${COPY_MODE}" \
+        -e "CONTAINER_TTL=${CONTAINER_TTL}" \
         "$IMAGE" \
-        sleep infinity
+        /bin/bash -c "$watchdog"
 
     container start "$CONTAINER_NAME"
     log "Container started."
@@ -171,10 +189,13 @@ ensure_container_running
 
 # ── Environment for container exec ────────────────────────────────────────────
 # Container-specific overrides
+# NOTE: Do NOT set CLAUDE_CODE_EXECUTABLE — the ACP binary bundles its own
+# Claude Code runtime and invokes itself with --cli. Pointing it at the
+# standalone claude binary breaks the --cli handshake.
 EXEC_ENV=(
     -e "HOME=/home/sandbox"
-    -e "CLAUDE_CODE_EXECUTABLE=/home/sandbox/.local/bin/claude"
     -e "CLAUDE_CODE_SHELL=/bin/bash"
+    -e "ANTHROPIC_API_KEY="
 )
 # Forward host env vars (typically set via Zed agent_servers.env config)
 for var in ANTHROPIC_BASE_URL API_TIMEOUT_MS \
