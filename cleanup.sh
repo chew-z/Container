@@ -50,7 +50,7 @@ cached_containers_json() {
 
 get_managed_containers() {
     cached_containers_json | jq -r '.[].configuration.id' | while IFS= read -r name; do
-        is_managed "$name" && echo "$name"
+        is_managed "$name" && echo "$name" || true
     done
 }
 

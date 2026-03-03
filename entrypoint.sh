@@ -10,11 +10,20 @@ case "${1:-}" in
         ;;
 esac
 
-# ── 1. Copy ~/.claude config from host mount ──────────────────────────────────
+# ── 1. Copy ~/.claude config from host mount (essentials only) ────────────────
 if [[ -d /mnt/in/claude_dir ]]; then
-    echo "[entrypoint] Copying ~/.claude config..." >&2
+    echo "[entrypoint] Copying ~/.claude config (essentials only)..." >&2
     mkdir -p /home/sandbox/.claude
-    cp -rp /mnt/in/claude_dir/. /home/sandbox/.claude/
+
+    # Top-level config files
+    for f in settings.json CLAUDE.md claude-devtools-config.json; do
+        [[ -f /mnt/in/claude_dir/$f ]] && cp -p "/mnt/in/claude_dir/$f" "/home/sandbox/.claude/$f"
+    done
+
+    # Essential directories
+    for d in commands hooks skills plugins statsig; do
+        [[ -d /mnt/in/claude_dir/$d ]] && cp -rp "/mnt/in/claude_dir/$d" "/home/sandbox/.claude/$d"
+    done
 fi
 
 # ── 2. Copy .claude.json from host home ───────────────────────────────────────
@@ -38,7 +47,7 @@ if [[ -d /mnt/in/home/.ssh ]]; then
     cp /mnt/in/home/.ssh/config /home/sandbox/.ssh/ 2>/dev/null || true
     chmod 700 /home/sandbox/.ssh
     chmod 600 /home/sandbox/.ssh/* 2>/dev/null || true
-    ssh-keyscan -t ed25519 github.com >> /home/sandbox/.ssh/known_hosts 2>/dev/null
+    ssh-keyscan -T 5 -t ed25519 github.com >> /home/sandbox/.ssh/known_hosts 2>/dev/null || true
 fi
 if [[ -f /mnt/in/home/.gitconfig ]]; then
     echo "[entrypoint] Copying .gitconfig..." >&2
@@ -90,6 +99,27 @@ Create a fresh Linux virtual environment:
 uv venv .venv && source .venv/bin/activate
 uv pip install -r requirements.txt
 ```
+
+## Anthropic API Environment
+
+`ANTHROPIC_API_KEY` is set to an **empty string** in this container so that
+Claude Code uses OAuth authentication. If your Python scripts call the
+Anthropic SDK directly, the empty env var takes precedence over `.env` and
+causes a `TypeError`.
+
+**Fix:** use `load_dotenv(override=True)` so the real key from `.env` wins,
+or pass `api_key=` explicitly to the `Anthropic()` client.
+
+If `ANTHROPIC_BASE_URL` is set (e.g. to a proxy for Claude Code), Python scripts
+that call the Anthropic API directly must reset it:
+
+\`\`\`python
+import os
+os.environ.pop("ANTHROPIC_BASE_URL", None)   # remove proxy URL
+\`\`\`
+
+Or set `ANTHROPIC_BASE_URL=https://api.anthropic.com` in your `.env` alongside
+the API key, and use `load_dotenv(override=True)` to restore both.
 
 ## Go
 

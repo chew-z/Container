@@ -113,9 +113,7 @@ HOME_MOUNT="type=bind,source=${HOME},target=/mnt/in/home,readonly"
 setup_container_config() {
     log "Setting up config inside container..."
     container exec "$CONTAINER_NAME" /bin/bash -c \
-        'mkdir -p /home/sandbox/.claude && \
-         cp -a /mnt/in/claude_dir/. /home/sandbox/.claude/ && \
-         cp /mnt/in/home/.claude.json /home/sandbox/.claude.json 2>/dev/null || true' >>"$LOG_FILE" 2>&1
+        'mkdir -p /home/sandbox/.claude; for f in settings.json CLAUDE.md claude-devtools-config.json; do [ -f /mnt/in/claude_dir/$f ] && cp -p /mnt/in/claude_dir/$f /home/sandbox/.claude/$f; done; for d in commands hooks skills plugins statsig; do [ -d /mnt/in/claude_dir/$d ] && cp -rp /mnt/in/claude_dir/$d /home/sandbox/.claude/$d; done; cp /mnt/in/home/.claude.json /home/sandbox/.claude.json 2>/dev/null; true' >>"$LOG_FILE" 2>&1
     # Write credentials file (Linux plaintext fallback for Keychain)
     if [[ -n "${CLAUDE_CREDS:-}" ]]; then
         log "Writing credentials file into container..."
@@ -137,7 +135,7 @@ chmod 600 /home/sandbox/.claude/.credentials.json" >>"$LOG_FILE" 2>&1
          chmod 700 /home/sandbox/.ssh && \
          chmod 600 /home/sandbox/.ssh/id_* 2>/dev/null || true && \
          chmod 644 /home/sandbox/.ssh/id_*.pub 2>/dev/null || true && \
-         ssh-keyscan -t ed25519 github.com >> /home/sandbox/.ssh/known_hosts 2>/dev/null && \
+         ssh-keyscan -T 5 -t ed25519 github.com >> /home/sandbox/.ssh/known_hosts 2>/dev/null || true && \
          cat > /home/sandbox/.ssh/config << '\''SSHEOF'\''
 Host github.com
     User git
