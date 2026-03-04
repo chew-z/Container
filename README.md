@@ -3,6 +3,7 @@
 Run Claude Code inside a sandboxed Linux container on macOS — full isolation, ephemeral by default, credentials bridged automatically from Keychain.
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "12px"}}}%%
 flowchart LR
     subgraph Host["macOS Host"]
         Terminal["Terminal"]
@@ -38,30 +39,33 @@ flowchart LR
 
 ## Documentation
 
-| Document | What's inside |
-| --- | --- |
-| [CONFIGURATION.md](CONFIGURATION.md) | Build config, feature flags, permission modes, simple mode, templates |
-| [RUNNING.md](RUNNING.md) | Building images, running containers, workspace isolation, cleanup |
+| Document                                 | What's inside                                                         |
+| ---------------------------------------- | --------------------------------------------------------------------- |
+| [CONFIGURATION.md](CONFIGURATION.md)     | Build config, feature flags, permission modes, simple mode, templates |
+| [RUNNING.md](RUNNING.md)                 | Building images, running containers, workspace isolation, cleanup     |
+| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common errors and quick fixes                                         |
 
 ## Files
 
-| File | Purpose |
-| --- | --- |
-| `Dockerfile` | Multi-target image: base + Python or Go |
-| `entrypoint.sh` | Container startup: copies config, credentials, SSH keys, workspace |
-| `launch.sh` | Interactive mode: ephemeral container with full isolation |
-| `zed-claude-acp.sh` | Zed ACP mode (not operational — see below) |
-| `cleanup.sh` | Manage containers and images (list/stop/remove/prune) |
-| `container-build.toml` | Build-time versions and feature flags |
-| `templates/CONTAINER.*.md.tmpl` | Language-specific CONTAINER.md templates |
-| `CONTAINER.md` | Auto-generated at runtime; tells Claude it's in a Linux container |
-| `.dockerignore` | Limits build context to Dockerfile + entrypoint + templates |
+| File                            | Purpose                                                                                                    |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `Dockerfile`                    | Multi-target image: base + Python or Go                                                                    |
+| `entrypoint.sh`                 | Container startup: copies config, credentials, SSH keys, workspace                                         |
+| `launch.sh`                     | Main runner: optionally builds image, then starts an interactive Claude session in an ephemeral container  |
+| `zed-claude-acp.sh`             | Zed ACP mode (not operational — see below)                                                                 |
+| `cleanup.sh`                    | Manage containers and images (list/stop/remove/prune)                                                      |
+| `container-build.toml`          | Build-time versions and feature flags                                                                      |
+| `container-run.toml`            | Per-project runtime settings (VM resources, Claude mode/permissions, workspace excludes, credential hosts) |
+| `templates/CONTAINER.*.md.tmpl` | Language-specific CONTAINER.md templates                                                                   |
+| `CONTAINER.md`                  | Auto-generated at runtime; tells Claude it's in a Linux container                                          |
+| `.dockerignore`                 | Limits build context to Dockerfile + entrypoint + templates                                                |
 
 ## Container Images
 
 Multi-target Dockerfile with a shared base and language-specific stages:
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "12px"}}}%%
 flowchart TB
     Base["base stage<br/><i>Debian bookworm-slim, arm64</i>"] --> Python["python stage"]
     Base --> Golang["golang stage"]
@@ -79,11 +83,17 @@ flowchart TB
     Golang --> golang_img
 ```
 
+Plain-language view:
+
+- **Base stage** = preinstalled common tools used in every image (Claude, git, gh, jq, ripgrep, fd, fzf, uv, ssh client).
+- **Python/Go stages** = add language-specific toolchains on top of that base.
+- This keeps builds faster and simpler because shared tools are defined once.
+
 **Base tooling (both images):** Claude Code (binary), git, gh, jq, ripgrep, fd, fzf, uv, openssh-client. Non-root `sandbox` user.
 
-| Image | Build command |
-| --- | --- |
-| `claudecode-python` | `./launch.sh --rebuild` |
+| Image               | Build command                         |
+| ------------------- | ------------------------------------- |
+| `claudecode-python` | `./launch.sh --rebuild`               |
 | `claudecode-golang` | `./launch.sh --rebuild --lang golang` |
 
 ## Zed ACP Mode (On Hold)
@@ -96,35 +106,4 @@ flowchart TB
 
 ## Troubleshooting
 
-**"Not logged in" inside container**
-
-- Verify host login: `claude login`
-- Check Keychain: `security find-generic-password -s "Claude Code-credentials" -w | jq .`
-
-**"Image not found"**
-
-- Build first: `./launch.sh --rebuild`
-
-**Build OOM ("cannot allocate memory")**
-
-- Increase builder memory: `BUILD_MEMORY=12g ./launch.sh --rebuild`
-
-**401 "invalid x-api-key" errors**
-
-- Your project's `.env` file likely contains `ANTHROPIC_API_KEY`. Claude Code autoloads `.env`, overriding OAuth with a stale key.
-- Both scripts set `ANTHROPIC_API_KEY=` (empty) to prevent this.
-
-**GitHub push/PR not working inside container**
-
-- Verify `gh auth status` on host
-- Check SSH key: `ssh -T git@github.com` inside container
-- Ensure `gh:github.com` entry exists in Keychain: `security find-generic-password -s "gh:github.com"`
-
-**Container system not running**
-
-- Start the runtime: `container system start`
-
-**"Query closed before response received" in Zed**
-
-- Ensure `CLAUDE_CODE_EXECUTABLE` is **not** set in Zed's env block
-- Check ACP logs: `tail -f /tmp/zed-claude-acp.log`
+Moved to [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) to keep this README focused on setup and architecture.

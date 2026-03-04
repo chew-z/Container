@@ -40,7 +40,7 @@ claude_additional_system_prompt = ""
 # Additional patterns to exclude when copying workspace into the container.
 # These are ADDED to the built-in defaults (.venv, node_modules, __pycache__, etc.)
 # Each pattern is passed as --exclude to tar.
-additional_excludes = [bin]
+additional_excludes = ["bin"]
 
 [credentials]
 # Git hosts to add to known_hosts via ssh-keyscan.

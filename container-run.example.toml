@@ -1,6 +1,7 @@
 # Per-project container runtime configuration
 # Place this file as container-run.toml in your project root.
 # CLI flags (--memory, --cpus) override these values.
+# This file is read by launch.sh on every run (no image rebuild required).
 #
 # Defaults (when no config file or CLI flags are provided):
 #   memory = "2g",  cpus = 4
@@ -40,6 +41,11 @@ claude_additional_system_prompt = ""
 # Additional patterns to exclude when copying workspace into the container.
 # These are ADDED to the built-in defaults (.venv, node_modules, __pycache__, etc.)
 # Each pattern is passed as --exclude to tar.
+#
+# Special case: "bin" excludes only the workspace-root ./bin/ directory.
+# It does NOT exclude nested paths like src/bin or tools/bin.
+#
+# For explicit path control, prefer root-anchored patterns like "./dist".
 additional_excludes = []
 
 [credentials]

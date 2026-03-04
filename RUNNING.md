@@ -3,6 +3,7 @@
 ## Overview
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "12px"}}}%%
 flowchart LR
     Build["./launch.sh --rebuild<br/><i>Build image</i>"] --> Run["./launch.sh<br/><i>Start container</i>"]
     Run --> Work["Claude session<br/><i>Code, test, commit</i>"]
@@ -36,10 +37,10 @@ Feature flags (`claude_simple_mode`, `claude_skip_permissions`) live in `contain
 
 The Apple `container` builder has limited defaults. Override if builds are slow or OOM:
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `BUILD_CPUS` | `2` | CPUs allocated to builder |
-| `BUILD_MEMORY` | `4g` | Memory allocated to builder |
+| Variable       | Default | Description                 |
+| -------------- | ------- | --------------------------- |
+| `BUILD_CPUS`   | `2`     | CPUs allocated to builder   |
+| `BUILD_MEMORY` | `4g`    | Memory allocated to builder |
 
 ```bash
 BUILD_CPUS=4 BUILD_MEMORY=8g ./launch.sh --rebuild
@@ -50,6 +51,7 @@ BUILD_CPUS=4 BUILD_MEMORY=8g ./launch.sh --rebuild
 ### How It Works
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "12px"}}}%%
 sequenceDiagram
     participant H as Host (launch.sh)
     participant K as macOS Keychain
@@ -70,32 +72,33 @@ sequenceDiagram
 
 ### Command Reference
 
-| Flag | Description |
-| --- | --- |
-| `--rebuild` | Build/rebuild the container image before running |
-| `-C, --project PATH` | Project directory (default: `$PWD`) |
-| `--lang LANG` | Language target: `python` (default) or `golang` |
-| `--memory SIZE` | Container VM memory (e.g., `4g`, `8g`). Overrides config and defaults |
-| `--cpus N` | Container VM CPUs. Overrides config and defaults |
-| `--rw` | Mount workspace read-write (no isolation) |
-| `--update-claude` | Allow Claude to auto-update inside the container |
-| `--config PATH` | Build config path (default: `./container-build.toml`) |
-| `-- ARGS...` | Pass remaining arguments to claude |
+| Flag                 | Description                                                           |
+| -------------------- | --------------------------------------------------------------------- |
+| `--rebuild`          | Build/rebuild the container image before running                      |
+| `-C, --project PATH` | Project directory (default: `$PWD`)                                   |
+| `--lang LANG`        | Language target: `python` (default) or `golang`                       |
+| `--memory SIZE`      | Container VM memory (e.g., `4g`, `8g`). Overrides config and defaults |
+| `--cpus N`           | Container VM CPUs. Overrides config and defaults                      |
+| `--rw`               | Mount workspace read-write (no isolation)                             |
+| `--update-claude`    | Allow Claude to auto-update inside the container                      |
+| `--config PATH`      | Build config path (default: `./container-build.toml`)                 |
+| `-- ARGS...`         | Pass remaining arguments to claude                                    |
 
 ### Environment Variables
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `CONTAINER_LANG` | `python` | Language target |
-| `BUILD_CPUS` | `2` | CPUs for image builder |
-| `BUILD_MEMORY` | `4g` | Memory for image builder |
-| `CONTAINER_BUILD_CONFIG` | `./container-build.toml` | Build config path override |
-| `CONTAINER_RUN_CONFIG` | `$PROJECT/container-run.toml` | Per-project runtime config path override |
-| `CLAUDE_CODE_SIMPLE` | `1` (from run config) | Simple mode flag (see [CONFIGURATION.md](CONFIGURATION.md#claude_simple_mode)) |
+| Variable                 | Default                       | Description                                                                    |
+| ------------------------ | ----------------------------- | ------------------------------------------------------------------------------ |
+| `CONTAINER_LANG`         | `python`                      | Language target                                                                |
+| `BUILD_CPUS`             | `2`                           | CPUs for image builder                                                         |
+| `BUILD_MEMORY`           | `4g`                          | Memory for image builder                                                       |
+| `CONTAINER_BUILD_CONFIG` | `./container-build.toml`      | Build config path override                                                     |
+| `CONTAINER_RUN_CONFIG`   | `$PROJECT/container-run.toml` | Per-project runtime config path override                                       |
+| `CLAUDE_CODE_SIMPLE`     | `1` (from run config)         | Simple mode flag (see [CONFIGURATION.md](CONFIGURATION.md#claude_simple_mode)) |
 
 ### Workspace Isolation
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "12px"}}}%%
 flowchart TD
     Launch["./launch.sh"] --> Mode{"--rw flag?"}
 
@@ -116,9 +119,12 @@ flowchart TD
 
 **Kept:** source code, `.git/`, `.claude/`, `.mcp.json`, `.env`, docs
 
+When using `container-run.toml` `additional_excludes`, the value `"bin"` is treated as workspace-root only (`./bin/`) and does not exclude nested paths like `src/bin`.
+
 ### Authentication Bridge
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "12px"}}}%%
 sequenceDiagram
     participant K as macOS Keychain
     participant S as launch.sh
@@ -157,13 +163,13 @@ The container runs Linux arm64 but the host is macOS. This causes cross-platform
 
 Key differences from interactive mode:
 
-|  | `launch.sh` | `zed-claude-acp.sh` |
-| --- | --- | --- |
-| Container name | `claude-<project>` | `zed-<project>` |
-| Lifecycle | Ephemeral (`--rm`) | Persistent (30 min idle TTL) |
-| Workspace | Copied (filtered, isolated) | Bind-mounted RW at host path |
-| Interaction | Interactive terminal | Zed Agent Panel via ACP |
-| Host changes | Only with `--rw` | Always |
+|                | `launch.sh`                 | `zed-claude-acp.sh`          |
+| -------------- | --------------------------- | ---------------------------- |
+| Container name | `claude-<project>`          | `zed-<project>`              |
+| Lifecycle      | Ephemeral (`--rm`)          | Persistent (30 min idle TTL) |
+| Workspace      | Copied (filtered, isolated) | Bind-mounted RW at host path |
+| Interaction    | Interactive terminal        | Zed Agent Panel via ACP      |
+| Host changes   | Only with `--rw`            | Always                       |
 
 **Container TTL:** Auto-stop after 30 minutes idle (no active `claude-agent-acp` process). Override:
 
@@ -180,13 +186,13 @@ CONTAINER_TTL=0       # never auto-stop
 
 The `cleanup.sh` script manages all containers (prefixed `claude-*` and `zed-*`) and images (prefixed `claudecode-*`).
 
-| Command | Description |
-| --- | --- |
-| `./cleanup.sh` | List all managed containers and status |
-| `./cleanup.sh --stop NAME` | Stop a specific container |
-| `./cleanup.sh --stop` | Stop all managed containers |
-| `./cleanup.sh --remove` | Delete all stopped containers |
-| `./cleanup.sh --remove NAME` | Delete a specific stopped container |
-| `./cleanup.sh --prune` | Stop and delete all containers |
-| `./cleanup.sh --images` | List `claudecode-*` images |
-| `./cleanup.sh --images --prune` | Delete all `claudecode-*` images |
+| Command                         | Description                            |
+| ------------------------------- | -------------------------------------- |
+| `./cleanup.sh`                  | List all managed containers and status |
+| `./cleanup.sh --stop NAME`      | Stop a specific container              |
+| `./cleanup.sh --stop`           | Stop all managed containers            |
+| `./cleanup.sh --remove`         | Delete all stopped containers          |
+| `./cleanup.sh --remove NAME`    | Delete a specific stopped container    |
+| `./cleanup.sh --prune`          | Stop and delete all containers         |
+| `./cleanup.sh --images`         | List `claudecode-*` images             |
+| `./cleanup.sh --images --prune` | Delete all `claudecode-*` images       |

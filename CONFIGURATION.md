@@ -26,24 +26,24 @@ install_claude_agent_acp = false # Install ACP binary (for Zed integration)
 
 ### [versions] — Tool Versions
 
-| Key | Default | Description |
-| --- | --- | --- |
-| `claude_code` | `latest` | Claude Code binary version |
-| `claude_agent_acp` | `latest` | ACP binary version |
-| `gh` | `2.87.3` | GitHub CLI version |
-| `fd` | `10.3.0` | fd-find version |
-| `python` | `3.14` | Python version (Python image only) |
-| `go` | `1.26.0` | Go version (Go image only) |
-| `golangci_lint` | `v2.4.0` | golangci-lint version (Go image only) |
+| Key                | Default  | Description                           |
+| ------------------ | -------- | ------------------------------------- |
+| `claude_code`      | `latest` | Claude Code binary version            |
+| `claude_agent_acp` | `latest` | ACP binary version                    |
+| `gh`               | `2.87.3` | GitHub CLI version                    |
+| `fd`               | `10.3.0` | fd-find version                       |
+| `python`           | `3.14`   | Python version (Python image only)    |
+| `go`               | `1.26.0` | Go version (Go image only)            |
+| `golangci_lint`    | `v2.4.0` | golangci-lint version (Go image only) |
 
 Version changes require a rebuild (`./launch.sh --rebuild`).
 
 ### [builder] — Builder VM Resources
 
-| Key | Default | Description |
-| --- | --- | --- |
-| `cpus` | `2` | CPUs allocated to the builder process |
-| `memory` | `"4g"` | Memory allocated to the builder process |
+| Key      | Default | Description                             |
+| -------- | ------- | --------------------------------------- |
+| `cpus`   | `2`     | CPUs allocated to the builder process   |
+| `memory` | `"4g"`  | Memory allocated to the builder process |
 
 **Resolution order** (highest priority wins):
 
@@ -88,10 +88,10 @@ A template is provided at `container-run.example.toml`.
 
 ### [resources] — VM Resources
 
-| Key | Default | Description |
-| --- | --- | --- |
-| `memory` | `"2g"` | Container VM memory (e.g., `"2g"`, `"8g"`, `"512m"`) |
-| `cpus` | `4` | Number of CPUs for the container VM |
+| Key      | Default | Description                                          |
+| -------- | ------- | ---------------------------------------------------- |
+| `memory` | `"2g"`  | Container VM memory (e.g., `"2g"`, `"8g"`, `"512m"`) |
+| `cpus`   | `4`     | Number of CPUs for the container VM                  |
 
 **Resolution order** (highest priority wins):
 
@@ -114,6 +114,7 @@ These flags are read at every `launch.sh` invocation — no rebuild required.
 Sets `CLAUDE_CODE_SIMPLE=1` at container runtime. This is a Claude Code built-in flag that creates a leaner session.
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "12px"}}}%%
 flowchart TD
     Start["Container starts"] --> Check{"claude_simple_mode?"}
 
@@ -132,6 +133,7 @@ flowchart TD
 **Why default ON:** The Go image has no Python/uv, which hooks require. Rather than adding Python to every image, simple mode avoids startup errors.
 
 **What still works in simple mode:**
+
 - All core Claude Code functionality (code reading, editing, terminal, git)
 - `settings.json`, commands, skills, plugins (copied from `~/.claude/`)
 - Project-local `.claude/` directory (copied with workspace)
@@ -153,6 +155,7 @@ flowchart TD
 Controls how Claude handles permission prompts inside the container.
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "12px"}}}%%
 flowchart TD
     Start["launch.sh reads claude_skip_permissions"] --> Mode{"Value?"}
 
@@ -165,11 +168,11 @@ flowchart TD
     Off --> O1["Normal interactive prompts<br/>User confirms each action"]
 ```
 
-| Value | Claude flags | Behavior |
-| --- | --- | --- |
-| `"yolo"` | `--dangerously-skip-permissions` | Skip all prompts, full autonomy |
-| `"plan"` | `--permission-mode plan --allow-dangerously-skip-permissions` | Start in plan mode; Claude can propose escalation |
-| `"false"` | *(none)* | Normal interactive prompts |
+| Value     | Claude flags                                                  | Behavior                                          |
+| --------- | ------------------------------------------------------------- | ------------------------------------------------- |
+| `"yolo"`  | `--dangerously-skip-permissions`                              | Skip all prompts, full autonomy                   |
+| `"plan"`  | `--permission-mode plan --allow-dangerously-skip-permissions` | Start in plan mode; Claude can propose escalation |
+| `"false"` | _(none)_                                                      | Normal interactive prompts                        |
 
 **Why "yolo" is safe:** The container is ephemeral and isolated. Changes stay inside unless you explicitly push via git. There is no risk to the host filesystem in copy mode (default).
 
@@ -190,9 +193,9 @@ The built-in prompt (`You MUST read CONTAINER.md...`) is always injected first. 
 
 ### [workspace] — Workspace Copy Settings
 
-| Key | Default | Description |
-| --- | --- | --- |
-| `additional_excludes` | `[]` | Additional tar `--exclude` patterns for workspace copy |
+| Key                   | Default | Description                                            |
+| --------------------- | ------- | ------------------------------------------------------ |
+| `additional_excludes` | `[]`    | Additional tar `--exclude` patterns for workspace copy |
 
 The base exclude list (`.venv`, `node_modules`, `__pycache__`, `.DS_Store`, etc.) is always applied. This setting **adds** to it — it does not replace the defaults.
 
@@ -203,10 +206,12 @@ additional_excludes = ["vendor", "dist", ".next"]
 
 Patterns are passed directly to `tar --exclude`, so they follow tar's glob syntax.
 
+Special case: using `"bin"` excludes only the workspace-root `./bin/` directory (not nested paths such as `src/bin` or `tools/bin`).
+
 ### [credentials] — Credential Settings
 
-| Key | Default | Description |
-| --- | --- | --- |
+| Key               | Default          | Description                                         |
+| ----------------- | ---------------- | --------------------------------------------------- |
 | `ssh_known_hosts` | `["github.com"]` | Git hosts to add to `known_hosts` via `ssh-keyscan` |
 
 By default, only `github.com` is scanned. Add hosts for GitHub Enterprise, GitLab, or other private Git servers.
@@ -228,21 +233,21 @@ At startup, `entrypoint.sh` renders a `CONTAINER.md` file from templates in the 
 
 ### Template files
 
-| Template | Used when |
-| --- | --- |
-| `templates/CONTAINER.python.md.tmpl` | Python image (default) |
+| Template                             | Used when                       |
+| ------------------------------------ | ------------------------------- |
+| `templates/CONTAINER.python.md.tmpl` | Python image (default)          |
 | `templates/CONTAINER.golang.md.tmpl` | Go image (when `go` is in PATH) |
 
 ### Placeholders
 
 Templates support variable substitution:
 
-| Placeholder | Resolved from |
-| --- | --- |
-| `{{PYTHON_VERSION}}` | `python3 --version` |
-| `{{GO_VERSION}}` | `go version` |
-| `{{GOLANGCI_LINT_VERSION}}` | `golangci-lint version` |
-| `{{CLAUDE_VERSION}}` | Stored version file or `claude --version` |
+| Placeholder                 | Resolved from                             |
+| --------------------------- | ----------------------------------------- |
+| `{{PYTHON_VERSION}}`        | `python3 --version`                       |
+| `{{GO_VERSION}}`            | `go version`                              |
+| `{{GOLANGCI_LINT_VERSION}}` | `golangci-lint version`                   |
+| `{{CLAUDE_VERSION}}`        | Stored version file or `claude --version` |
 
 ### Conditional blocks
 

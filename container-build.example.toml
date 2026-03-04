@@ -1,9 +1,11 @@
 # Container build configuration
 # Used by launch.sh when --rebuild is enabled.
 # Override path with: --config PATH or CONTAINER_BUILD_CONFIG env var.
+# Version changes here affect newly built images only.
 
 [versions]
 # Use "latest" to resolve dynamically at build time.
+# Pin versions for reproducible images.
 claude_code = "latest"
 claude_agent_acp = "latest"
 gh = "2.87.3"
@@ -15,10 +17,12 @@ golangci_lint = "v2.4.0"
 [builder]
 # Resources allocated to the container builder process.
 # Env vars BUILD_CPUS / BUILD_MEMORY override these.
+# Useful when rebuilds are slow or fail with OOM.
 cpus = 2
 memory = "4g"
 
 [features]
 # Install claude-agent-acp for connecting Claude Code to Zed editor.
 # Adds ~50MB to the image. Default is OFF.
+# Rebuild required when toggled.
 install_claude_agent_acp = false

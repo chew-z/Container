@@ -102,6 +102,12 @@ if [[ "${SANDBOX_COPY_MODE:-0}" == "1" ]]; then
     if [[ -n "${EXTRA_EXCLUDES:-}" ]]; then
         while IFS= read -r _pattern; do
             [[ -z "$_pattern" ]] && continue
+            # Special-case plain "bin": exclude only workspace-root ./bin/.
+            # This avoids matching nested paths such as src/bin or tools/bin.
+            if [[ "$_pattern" == "bin" ]]; then
+                EXCLUDE_ARGS+=("--exclude=./bin" "--exclude=./bin/*")
+                continue
+            fi
             EXCLUDE_ARGS+=("--exclude=$_pattern")
         done <<< "$EXTRA_EXCLUDES"
     fi
