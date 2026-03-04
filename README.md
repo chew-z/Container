@@ -16,9 +16,9 @@ flowchart LR
         Tools["git, gh, ripgrep, fd, fzf"]
     end
 
-    Terminal -->|"launch.sh"| Claude
-    Keychain -.->|"OAuth + gh token"| Container
-    Project -->|"copy or bind mount"| Container
+    Terminal -->|launch.sh| Claude
+    Keychain -.->|OAuth + gh token| Container
+    Project -->|copy or bind mount| Container
 ```
 
 Claude Code runs in an ephemeral, isolated container - it is a strong fit for Claude Code YOLO permission modes like `--dangerously-skip-permissions` or `--allow-dangerously-skip-permissions`: risky actions are sandboxed, and local changes disappear unless user intentionally persist them (for example via git PR).

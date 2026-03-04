@@ -8,7 +8,7 @@ flowchart LR
     Build["./launch.sh --rebuild<br/><i>Build image</i>"] --> Run["./launch.sh<br/><i>Start container</i>"]
     Run --> Work["Claude session<br/><i>Code, test, commit</i>"]
     Work --> Done["Exit<br/><i>Container destroyed</i>"]
-    Work -->|"git push / gh pr create"| Persist["Changes persisted<br/>via git"]
+    Work -->|git push / gh pr create| Persist["Changes persisted<br/>via git"]
 ```
 
 Containers are ephemeral by default — all local changes are lost on exit. Push via git to persist work.
@@ -102,8 +102,8 @@ sequenceDiagram
 flowchart TD
     Launch["./launch.sh"] --> Mode{"--rw flag?"}
 
-    Mode -->|"No (default)"| Copy["Copy mode"]
-    Mode -->|"Yes"| RW["Read-write mount"]
+    Mode -->|No (default)| Copy["Copy mode"]
+    Mode -->|Yes| RW["Read-write mount"]
 
     Copy --> C1["Project bind-mounted read-only<br/>at /mnt/in/workspace"]
     C1 --> C2["entrypoint.sh copies to /workspace<br/>(filtered — excludes build artifacts)"]
