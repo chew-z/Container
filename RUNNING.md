@@ -3,7 +3,7 @@
 ## Overview
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "8px"}}}%%
+%%{init: {"themeVariables": {"fontSize": "9pt"}, "flowchart": {"htmlLabels": false, "useMaxWidth": false}}}%%
 flowchart LR
     Build["./launch.sh --rebuild<br/><i>Build image</i>"] --> Run["./launch.sh<br/><i>Start container</i>"]
     Run --> Work["Claude session<br/><i>Code, test, commit</i>"]
@@ -51,7 +51,7 @@ BUILD_CPUS=4 BUILD_MEMORY=8g ./launch.sh --rebuild
 ### How It Works
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "8px"}}}%%
+%%{init: {"themeVariables": {"fontSize": "9pt"}, "flowchart": {"htmlLabels": false, "useMaxWidth": false}}}%%
 sequenceDiagram
     participant H as Host (launch.sh)
     participant K as macOS Keychain
@@ -98,7 +98,7 @@ sequenceDiagram
 ### Workspace Isolation
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "8px"}}}%%
+%%{init: {"themeVariables": {"fontSize": "9pt"}, "flowchart": {"htmlLabels": false, "useMaxWidth": false}}}%%
 flowchart TD
     Launch["./launch.sh"] --> Mode{"--rw flag?"}
 
@@ -124,7 +124,7 @@ When using `container-run.toml` `additional_excludes`, the value `"bin"` is trea
 ### Authentication Bridge
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "8px"}}}%%
+%%{init: {"themeVariables": {"fontSize": "9pt"}, "flowchart": {"htmlLabels": false, "useMaxWidth": false}}}%%
 sequenceDiagram
     participant K as macOS Keychain
     participant S as launch.sh

@@ -3,7 +3,7 @@
 **Run Claude Code inside a sandboxed Linux container on macOS** — full isolation, ephemeral by default, credentials bridged automatically (so uses your Claude Code plan).
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "8px"}}}%%
+%%{init: {"themeVariables": {"fontSize": "9pt"}, "flowchart": {"htmlLabels": false, "useMaxWidth": false}}}%%
 flowchart LR
     subgraph Host["macOS"]
         Terminal["Terminal"]
@@ -73,7 +73,7 @@ It is new tech but superior to Apple Seatbelt that Claude Code use for sandbox b
 Multi-target Dockerfile with a shared base and language-specific stages:
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "8px"}}}%%
+%%{init: {"themeVariables": {"fontSize": "9pt"}, "flowchart": {"htmlLabels": false, "useMaxWidth": false}}}%%
 flowchart TB
     Base["base stage<br/><i>Debian bookworm-slim,<br/>arm64</i>"] --> Python["python stage"]
     Base --> Golang["golang stage"]
