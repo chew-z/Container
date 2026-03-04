@@ -54,12 +54,12 @@ RUN curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_$
 USER sandbox
 RUN mkdir -p /home/sandbox/.local/bin && \
         if [[ "${CLAUDE_CODE_VERSION}" == "latest" ]]; then \
-            CLAUDE_VERSION=$(curl -fsSL "${CLAUDE_CODE_GCS}/latest"); \
+            CLAUDE_VERSION=$(curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "${CLAUDE_CODE_GCS}/latest"); \
         else \
             CLAUDE_VERSION="${CLAUDE_CODE_VERSION}"; \
         fi && \
     echo "Downloading Claude Code v${CLAUDE_VERSION} for linux-arm64..." && \
-    curl -fsSL "${CLAUDE_CODE_GCS}/${CLAUDE_VERSION}/linux-arm64/claude" \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "${CLAUDE_CODE_GCS}/${CLAUDE_VERSION}/linux-arm64/claude" \
         -o /home/sandbox/.local/bin/claude && \
         chmod +x /home/sandbox/.local/bin/claude && \
         mkdir -p /home/sandbox/.local/share && \
@@ -68,12 +68,12 @@ RUN mkdir -p /home/sandbox/.local/bin && \
 # ── claude-agent-acp binary (resolves latest from GitHub at build time) ────
 RUN if [[ "${INSTALL_CLAUDE_AGENT_ACP}" == "1" ]]; then \
             if [[ "${CLAUDE_AGENT_ACP_VERSION}" == "latest" ]]; then \
-                CLAUDE_ACP_VERSION=$(curl -fsSL "https://api.github.com/repos/zed-industries/claude-agent-acp/releases/latest" | jq -r '.tag_name'); \
+                CLAUDE_ACP_VERSION=$(curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://api.github.com/repos/zed-industries/claude-agent-acp/releases/latest" | jq -r '.tag_name'); \
             else \
                 CLAUDE_ACP_VERSION="${CLAUDE_AGENT_ACP_VERSION}"; \
             fi; \
             echo "Downloading claude-agent-acp ${CLAUDE_ACP_VERSION} for linux-arm64..."; \
-            curl -fsSL "https://github.com/zed-industries/claude-agent-acp/releases/download/${CLAUDE_ACP_VERSION}/claude-agent-acp-linux-arm64.tar.gz" \
+            curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/zed-industries/claude-agent-acp/releases/download/${CLAUDE_ACP_VERSION}/claude-agent-acp-linux-arm64.tar.gz" \
             | tar -xz -C /tmp; \
             mv /tmp/claude-agent-acp /home/sandbox/.local/bin/claude-agent-acp; \
             chmod +x /home/sandbox/.local/bin/claude-agent-acp; \
