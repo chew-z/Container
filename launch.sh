@@ -84,6 +84,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [[ "$LANG_TARGET" != "python" && "$LANG_TARGET" != "golang" ]]; then
+    echo "ERROR: Unsupported language target '$LANG_TARGET'. Use 'python' or 'golang'." >&2
+    exit 1
+fi
+
 # ── Resolve paths ─────────────────────────────────────────────────────────────
 PROJECT="$(cd "$PROJECT" && pwd)"
 

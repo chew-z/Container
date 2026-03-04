@@ -100,7 +100,35 @@ USER root
 ARG GO_VERSION=1.26.0
 RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-arm64.tar.gz" \
     | tar -xz -C /usr/local
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+ && rm -rf /var/lib/apt/lists/*
+
+ARG GOLANGCI_LINT_VERSION=v2.4.0
+RUN curl -fsSL "https://github.com/golangci/golangci-lint/releases/download/${GOLANGCI_LINT_VERSION}/golangci-lint-${GOLANGCI_LINT_VERSION#v}-linux-arm64.tar.gz" \
+    | tar -xz -C /tmp && \
+    mv "/tmp/golangci-lint-${GOLANGCI_LINT_VERSION#v}-linux-arm64/golangci-lint" /usr/local/bin/golangci-lint && \
+    chmod +x /usr/local/bin/golangci-lint && \
+    rm -rf "/tmp/golangci-lint-${GOLANGCI_LINT_VERSION#v}-linux-arm64"
+
 ENV PATH=/usr/local/go/bin:/home/sandbox/go/bin:$PATH
 ENV GOPATH=/home/sandbox/go
-RUN mkdir -p /home/sandbox/go && chown sandbox:sandbox /home/sandbox/go
+ENV GOBIN=/home/sandbox/.local/bin
+ENV GOCACHE=/home/sandbox/.cache/go-build
+ENV GOMODCACHE=/home/sandbox/go/pkg/mod
+ENV GOLANGCI_LINT_CACHE=/home/sandbox/.cache/golangci-lint
+RUN mkdir -p /home/sandbox/go \
+    /home/sandbox/.cache/go-build \
+    /home/sandbox/.cache/golangci-lint \
+ && chown -R sandbox:sandbox /home/sandbox/go /home/sandbox/.cache
 USER sandbox
+RUN go install golang.org/x/tools/gopls@latest && \
+    go install golang.org/x/tools/cmd/goimports@latest && \
+    go install gotest.tools/gotestsum@latest && \
+    go install golang.org/x/vuln/cmd/govulncheck@latest
+RUN go version && \
+    golangci-lint version && \
+    gopls version >/dev/null && \
+    goimports -help >/dev/null && \
+    gotestsum --version >/dev/null && \
+    govulncheck -version >/dev/null

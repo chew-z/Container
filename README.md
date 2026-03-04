@@ -52,15 +52,15 @@ flowchart LR
 
 ## Files
 
-| File | Purpose |
-|------|---------|
-| `Dockerfile` | Multi-target image: base + Python or Go |
-| `entrypoint.sh` | Container startup: copies config, credentials, SSH keys, workspace |
-| `launch.sh` | Interactive mode: ephemeral container with full isolation |
-| `zed-claude-acp.sh` | Zed ACP mode: persistent container with stdio bridge |
-| `cleanup.sh` | Manage containers and images (list/stop/remove/prune) |
-| `CONTAINER.md` | Auto-generated in project dir; tells Claude it's in a Linux container |
-| `.dockerignore` | Limits build context to Dockerfile + entrypoint.sh |
+| File                | Purpose                                                               |
+| ------------------- | --------------------------------------------------------------------- |
+| `Dockerfile`        | Multi-target image: base + Python or Go                               |
+| `entrypoint.sh`     | Container startup: copies config, credentials, SSH keys, workspace    |
+| `launch.sh`         | Interactive mode: ephemeral container with full isolation             |
+| `zed-claude-acp.sh` | Zed ACP mode: persistent container with stdio bridge                  |
+| `cleanup.sh`        | Manage containers and images (list/stop/remove/prune)                 |
+| `CONTAINER.md`      | Auto-generated in project dir; tells Claude it's in a Linux container |
+| `.dockerignore`     | Limits build context to Dockerfile + entrypoint.sh                    |
 
 ## How It Works
 
@@ -102,20 +102,20 @@ flowchart TB
     WS --> Exec["exec claude"]
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--rebuild` | Build/rebuild the container image |
-| `-C, --project PATH` | Project directory (default: `$PWD`) |
-| `--lang LANG` | Language target: `python` (default) or `golang` |
-| `--rw` | Mount workspace read-write (no isolation) |
-| `--update-claude` | Allow Claude to auto-update in container |
-| `-- ARGS...` | Pass arguments to claude |
+| Flag                 | Description                                     |
+| -------------------- | ----------------------------------------------- |
+| `--rebuild`          | Build/rebuild the container image               |
+| `-C, --project PATH` | Project directory (default: `$PWD`)             |
+| `--lang LANG`        | Language target: `python` (default) or `golang` |
+| `--rw`               | Mount workspace read-write (no isolation)       |
+| `--update-claude`    | Allow Claude to auto-update in container        |
+| `-- ARGS...`         | Pass arguments to claude                        |
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `CONTAINER_LANG` | `python` | Language target |
-| `BUILD_CPUS` | 2 | CPUs for image builder |
-| `BUILD_MEMORY` | 4g | Memory for image builder |
+| Variable         | Default  | Description              |
+| ---------------- | -------- | ------------------------ |
+| `CONTAINER_LANG` | `python` | Language target          |
+| `BUILD_CPUS`     | 2        | CPUs for image builder   |
+| `BUILD_MEMORY`   | 4g       | Memory for image builder |
 
 ### Mode 2: Zed ACP (`zed-claude-acp.sh`)
 
@@ -137,19 +137,19 @@ flowchart TB
 
 ```json
 {
-  "agent_servers": {
-    "Containerized Claude": {
-      "type": "custom",
-      "command": "/path/to/Container/zed-claude-acp.sh",
-      "env": {
-        "ANTHROPIC_BASE_URL": "https://your-proxy.example.com",
-        "API_TIMEOUT_MS": "6000000",
-        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-        "CLAUDE_CODE_SIMPLE": "1",
-        "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1"
-      }
+    "agent_servers": {
+        "Containerized Claude": {
+            "type": "custom",
+            "command": "/path/to/Container/zed-claude-acp.sh",
+            "env": {
+                "ANTHROPIC_BASE_URL": "https://your-proxy.example.com",
+                "API_TIMEOUT_MS": "6000000",
+                "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+                "CLAUDE_CODE_SIMPLE": "1",
+                "DISABLE_NON_ESSENTIAL_MODEL_CALLS": "1"
+            }
+        }
     }
-  }
 }
 ```
 
@@ -201,12 +201,14 @@ flowchart TB
         direction LR
         G1["Go 1.26"]
         G2["GOPATH=/home/sandbox/go"]
+        G3["golangci-lint, gopls, goimports"]
+        G4["gotestsum, govulncheck, build-essential"]
     end
 ```
 
-| Image | Build command |
-|-------|-------------|
-| `claudecode-python` | `./launch.sh --rebuild` |
+| Image               | Build command                         |
+| ------------------- | ------------------------------------- |
+| `claudecode-python` | `./launch.sh --rebuild`               |
 | `claudecode-golang` | `./launch.sh --rebuild --lang golang` |
 
 ### Base tooling (both images)
@@ -218,11 +220,25 @@ flowchart TB
 - git, jq, ripgrep, fd-find, fzf, openssh-client
 - Non-root `sandbox` user
 
+### Go tooling (`claudecode-golang`)
+
+- Go 1.26 (linux/arm64)
+- `golangci-lint` (preinstalled)
+- `gopls`, `goimports`, `gotestsum`, `govulncheck` (installed via `go install`)
+- `build-essential` for CGO/native module builds
+
+Go cache defaults in Go containers:
+
+- `GOCACHE=/home/sandbox/.cache/go-build`
+- `GOMODCACHE=/home/sandbox/go/pkg/mod`
+- `GOLANGCI_LINT_CACHE=/home/sandbox/.cache/golangci-lint`
+- `GOBIN=/home/sandbox/.local/bin`
+
 ### Workspace Copy Filtering
 
 In copy mode (default for `launch.sh`), the entrypoint filters out build artifacts and IDE files to reduce copy size and avoid macOS/Linux incompatibilities:
 
-**Excluded:** `.venv/`, `venv/`, `node_modules/`, `__pycache__/`, `*.pyc`, `.DS_Store`, `.ruff_cache/`, `.mypy_cache/`, `.pytest_cache/`, `.fastembed_cache/`, `.vscode/`, `.github/`, `.codex/`, `.codanna/`
+**Excluded:** `.venv/`, `venv/`, `node_modules/`, `__pycache__/`, `*.pyc`, `.DS_Store`, `.ruff_cache/`, `.mypy_cache/`, `.pytest_cache/`, `.fastembed_cache/`, `.vscode/`, `.github/`, `.codex/`, `.codanna/`, `bin/linux`
 
 **Kept:** source code, `.git/`, `.claude/` (CLAUDE.md), `.mcp.json`, `.env`, docs
 
@@ -247,14 +263,14 @@ flowchart LR
     end
 ```
 
-| | `launch.sh` | `zed-claude-acp.sh` |
-|---|---|---|
-| Container name | `claude-<project>` | `zed-<project>` |
-| Image | `claudecode-<lang>` | `claudecode-<lang>` |
-| Lifecycle | Ephemeral (`--rm`) | Persistent (30 min idle TTL) |
-| Workspace | Copied (filtered, isolated) | Bind-mounted RW at host path |
-| Interaction | Interactive terminal | Zed Agent Panel via ACP |
-| Host changes | Only with `--rw` | Always |
+|                | `launch.sh`                 | `zed-claude-acp.sh`          |
+| -------------- | --------------------------- | ---------------------------- |
+| Container name | `claude-<project>`          | `zed-<project>`              |
+| Image          | `claudecode-<lang>`         | `claudecode-<lang>`          |
+| Lifecycle      | Ephemeral (`--rm`)          | Persistent (30 min idle TTL) |
+| Workspace      | Copied (filtered, isolated) | Bind-mounted RW at host path |
+| Interaction    | Interactive terminal        | Zed Agent Panel via ACP      |
+| Host changes   | Only with `--rw`            | Always                       |
 
 ### Cross-Platform Awareness (`CONTAINER.md`)
 
@@ -273,9 +289,10 @@ Both scripts auto-generate a `CONTAINER.md` file in the project directory at sta
 ```
 
 The generated file tells Claude:
+
 - It's running in a Linux arm64 container, not macOS
 - How to create a Linux-native Python venv (instead of using the macOS `.venv/`)
-- How to handle Go build artifacts to avoid cross-platform conflicts
+- How to handle Go build artifacts and run Go quality tooling (`goimports`, `golangci-lint`, `gotestsum`, `govulncheck`)
 
 `launch.sh` generates it inside `/workspace` (isolated copy). `zed-claude-acp.sh` generates it in the host project directory (bind mount) — add `CONTAINER.md` to `.gitignore`.
 
@@ -323,34 +340,42 @@ flowchart TB
 ## Troubleshooting
 
 **"Not logged in" inside container**
+
 - Verify host login: `claude login`
 - Check Keychain: `security find-generic-password -s "Claude Code-credentials" -w | jq .`
 
 **"Image not found"**
+
 - Build first: `./launch.sh --rebuild`
 
 **Build OOM ("cannot allocate memory")**
+
 - Increase builder memory: `BUILD_MEMORY=12g ./launch.sh --rebuild`
 - Claude Code is installed as a direct binary download (no compilation), so OOM is unlikely unless the builder is severely memory-constrained
 
 **"Query closed before response received" in Zed**
+
 - Ensure `CLAUDE_CODE_EXECUTABLE` is **not** set in Zed's env block
 - Check ACP logs: `tail -f /tmp/zed-claude-acp.log`
 - Verify container: `./cleanup.sh`
 
 **401 "invalid x-api-key" errors**
+
 - Your project's `.env` file likely contains `ANTHROPIC_API_KEY`. Claude Code autoloads `.env` from the working directory, overriding OAuth authentication with an invalid/stale API key.
 - Both scripts set `ANTHROPIC_API_KEY=` (empty) in the container environment to prevent this. Bun won't override an existing env var from `.env`.
 
 **ACP not connecting in Zed**
+
 - Check logs: `tail -f /tmp/zed-claude-acp.log`
 - Zed command palette: `dev: open acp logs`
 - Verify container: `./cleanup.sh`
 
 **GitHub push/PR not working inside container**
+
 - Verify `gh auth status` on host
 - Check SSH key: `ssh -T git@github.com` inside container
 - Ensure `gh:github.com` entry exists in Keychain: `security find-generic-password -s "gh:github.com"`
 
 **Container system not running**
+
 - Start the runtime: `container system start`

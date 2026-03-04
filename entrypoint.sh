@@ -54,6 +54,15 @@ if [[ -f /mnt/in/home/.gitconfig ]]; then
     cp /mnt/in/home/.gitconfig /home/sandbox/.gitconfig
 fi
 
+if command -v go &>/dev/null; then
+    for ext in yml yaml; do
+        if [[ -f /mnt/in/home/.golangci.$ext ]]; then
+            echo "[entrypoint] Copying .golangci.$ext..." >&2
+            cp /mnt/in/home/.golangci.$ext /home/sandbox/.golangci.$ext
+        fi
+    done
+fi
+
 # ── 3. Copy workspace if in copy mode ────────────────────────────────────────
 if [[ "${SANDBOX_COPY_MODE:-0}" == "1" ]]; then
     echo "[entrypoint] Copy mode: copying workspace (filtering build artifacts)..." >&2
@@ -73,6 +82,7 @@ if [[ "${SANDBOX_COPY_MODE:-0}" == "1" ]]; then
         --exclude='.github' \
         --exclude='.codex' \
         --exclude='.codanna' \
+        --exclude='bin/linux' \
         -cf - . | tar -C /workspace -xf -
 fi
 
@@ -130,8 +140,32 @@ cat << 'GOLANG'
 
 ## Go
 
-`go build` produces Linux arm64 binaries. This is an isolated container so there
-are no cross-platform concerns — build normally.
+`go build` produces Linux arm64 binaries. In this isolated workspace copy that is
+safe by default, but keep output paths explicit when needed:
+
+```bash
+go build -o ./bin/linux/ ./...
+```
+
+### Installed Go tooling
+
+- `gopls`
+- `goimports`
+- `golangci-lint`
+- `gotestsum`
+- `govulncheck`
+
+### Recommended inner loop
+
+```bash
+goimports -w .
+golangci-lint run ./...
+gotestsum -- -race ./...
+govulncheck ./...
+```
+
+If present, host `~/.golangci.yml` or `~/.golangci.yaml` is copied into
+`/home/sandbox/`.
 GOLANG
 fi
 
