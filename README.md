@@ -5,14 +5,14 @@
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "9pt"}, "flowchart": {"htmlLabels": false, "useMaxWidth": false}}}%%
 flowchart LR
-    subgraph Host["macOS"]
-        Terminal["Terminal"]
-        Keychain["macOS Keychain"]
-        Project["Project Files"]
+    subgraph Host["macOS Host"]
+        Terminal["Terminal "]
+        Keychain["macOS Keychain "]
+        Project["Project Files "]
     end
 
-    subgraph Container["Linux (arm64)"]
-        Claude["Claude Code"]
+    subgraph Container["Linux Container (arm64)"]
+        Claude["Claude Code "]
         Tools["git, gh, ripgrep, fd, fzf"]
     end
 
