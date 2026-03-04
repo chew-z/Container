@@ -16,6 +16,9 @@ BUILD_CPUS="${BUILD_CPUS:-2}"
 BUILD_MEMORY="${BUILD_MEMORY:-4g}"
 CONFIG_FILE="${CONTAINER_BUILD_CONFIG:-$SCRIPT_DIR/container-build.toml}"
 
+RUN_MEMORY=""
+RUN_CPUS=""
+
 # ── Help ──────────────────────────────────────────────────────────────────────
 usage() {
     cat <<EOF
@@ -31,6 +34,8 @@ Options:
   --rebuild                Rebuild the container image before running
   --update-claude          Allow Claude to auto-update inside the container
   --lang LANG              Language target: python (default) or golang
+  --memory SIZE            Container memory (e.g., 4g, 8g). Overrides config/defaults
+  --cpus N                 Container CPUs. Overrides config/defaults
   --rw                     Mount workspace read-write directly (live, no isolation)
   --config PATH            Build config file (default: ./container-build.toml)
   --                       Pass remaining arguments to claude inside the container
@@ -40,6 +45,7 @@ Environment:
   BUILD_CPUS               CPUs for builder (default: 2)
   BUILD_MEMORY             Memory for builder (default: 4g)
   CONTAINER_BUILD_CONFIG   Build config path override
+  CONTAINER_RUN_CONFIG     Per-project runtime config path override
   CLAUDE_CODE_SIMPLE       Set to 1 (default via claude_simple_mode in config)
                            to disable hooks, MCP servers, attachments, and
                            CLAUDE.md files inside the container.
@@ -115,6 +121,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --lang)
             LANG_TARGET="${2:?--lang requires python or golang}"
+            shift 2
+            ;;
+        --memory)
+            RUN_MEMORY="${2:?--memory requires a size (e.g., 4g)}"
+            shift 2
+            ;;
+        --cpus)
+            RUN_CPUS="${2:?--cpus requires a number}"
             shift 2
             ;;
         --rw)
@@ -252,6 +266,17 @@ if [[ -f "$CONFIG_FILE" ]]; then
     esac
 fi
 
+# ── Read per-project runtime config ──────────────────────────────────────────
+PROJECT_RUN_CONFIG="${CONTAINER_RUN_CONFIG:-$PROJECT/container-run.toml}"
+if [[ -f "$PROJECT_RUN_CONFIG" ]]; then
+    [[ -z "$RUN_MEMORY" ]] && RUN_MEMORY="$(toml_get resources memory "$PROJECT_RUN_CONFIG" || true)"
+    [[ -z "$RUN_CPUS" ]]   && RUN_CPUS="$(toml_get resources cpus "$PROJECT_RUN_CONFIG" || true)"
+fi
+
+# Defaults (CLI flags > container-run.toml > defaults)
+RUN_MEMORY="${RUN_MEMORY:-2g}"
+RUN_CPUS="${RUN_CPUS:-4}"
+
 # Compose permission flags for claude
 case "$SKIP_PERMISSIONS" in
     yolo)
@@ -291,11 +316,14 @@ fi
 echo "==> Launching Claude Code for: $PROJECT"
 echo "==> Container: $CONTAINER_NAME"
 echo "==> Image: $IMAGE"
+echo "==> Resources: ${RUN_MEMORY} memory, ${RUN_CPUS} CPUs"
 
 RUN_ARGS=(
     container run -it --rm
     --name "$CONTAINER_NAME"
     --arch arm64
+    --memory "$RUN_MEMORY"
+    --cpus "$RUN_CPUS"
     --mount "$WORKSPACE_MOUNT"
     --mount "type=bind,source=${HOME}/.claude,target=/mnt/in/claude_dir,readonly"
     --mount "type=bind,source=${HOME},target=/mnt/in/home,readonly"

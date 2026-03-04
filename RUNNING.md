@@ -75,6 +75,8 @@ sequenceDiagram
 | `--rebuild` | Build/rebuild the container image before running |
 | `-C, --project PATH` | Project directory (default: `$PWD`) |
 | `--lang LANG` | Language target: `python` (default) or `golang` |
+| `--memory SIZE` | Container VM memory (e.g., `4g`, `8g`). Overrides config and defaults |
+| `--cpus N` | Container VM CPUs. Overrides config and defaults |
 | `--rw` | Mount workspace read-write (no isolation) |
 | `--update-claude` | Allow Claude to auto-update inside the container |
 | `--config PATH` | Build config path (default: `./container-build.toml`) |
@@ -88,6 +90,7 @@ sequenceDiagram
 | `BUILD_CPUS` | `2` | CPUs for image builder |
 | `BUILD_MEMORY` | `4g` | Memory for image builder |
 | `CONTAINER_BUILD_CONFIG` | `./container-build.toml` | Build config path override |
+| `CONTAINER_RUN_CONFIG` | `$PROJECT/container-run.toml` | Per-project runtime config path override |
 | `CLAUDE_CODE_SIMPLE` | `1` (from config) | Simple mode flag (see [CONFIGURATION.md](CONFIGURATION.md#claude_simple_mode)) |
 
 ### Workspace Isolation

@@ -119,6 +119,32 @@ Install the `claude-agent-acp` binary for Zed ACP integration. Adds ~50MB to the
 
 > **Note:** Zed ACP mode is currently not operational. Keep this `false` unless you are actively developing the ACP integration.
 
+## container-run.toml — Per-Project Runtime Resources
+
+Place a `container-run.toml` file in your **project directory** to configure the container VM resources. This is separate from `container-build.toml` (which lives with the Container repo) because different projects have different resource needs.
+
+```toml
+[resources]
+memory = "4g"    # Memory for the container VM (e.g., "2g", "8g", "512m")
+cpus = 4         # Number of CPUs for the container VM
+```
+
+A template is provided at `container-run.example.toml`.
+
+### Resolution order (highest priority wins)
+
+1. **CLI flags:** `--memory 8g --cpus 8`
+2. **Per-project config:** `$PROJECT/container-run.toml` `[resources]`
+3. **Defaults:** `memory = "2g"`, `cpus = 4`
+
+Override the config file path with `CONTAINER_RUN_CONFIG=/path/to/config.toml`.
+
+### When to increase resources
+
+- **Go compilation:** Set `memory = "4g"` or higher — Go builds are memory-hungry
+- **Large codebases:** More CPUs speed up parallel builds and tests
+- **AI/ML workloads:** May need 8g+ for model loading
+
 ## CONTAINER.md Templates
 
 At startup, `entrypoint.sh` renders a `CONTAINER.md` file from templates in the `templates/` directory. This file tells Claude about the container environment (Linux arm64, available tools, language-specific guidance).
