@@ -7,9 +7,9 @@
 
 [resources]
 # Memory for the container VM (e.g., "2g", "8g", "512m")
-memory = "4g"
+memory = "2g"
 # Number of CPUs for the container VM
-cpus = 4
+cpus = 2
 
 [claude]
 # Sets CLAUDE_CODE_SIMPLE=1 at runtime — disables hooks, MCP servers, attachments,
@@ -30,7 +30,7 @@ claude_simple_mode = true
 #             (start in plan mode, Claude can propose escalation to user)
 #   "false" — normal interactive prompts (no special flags)
 #
-claude_skip_permissions = "yolo"
+claude_skip_permissions = "false"
 
 # Additional system prompt appended after the built-in CONTAINER.md prompt.
 # Useful for project-specific instructions (e.g., "Always use pytest", "Prefer Go modules").
@@ -40,7 +40,7 @@ claude_additional_system_prompt = ""
 # Additional patterns to exclude when copying workspace into the container.
 # These are ADDED to the built-in defaults (.venv, node_modules, __pycache__, etc.)
 # Each pattern is passed as --exclude to tar.
-additional_excludes = []
+additional_excludes = [bin]
 
 [credentials]
 # Git hosts to add to known_hosts via ssh-keyscan.

@@ -1,6 +1,6 @@
 # Configuration
 
-All build-time and runtime configuration lives in `container-build.toml`. The file is read by `launch.sh --rebuild` (for build args) and at every `launch.sh` invocation (for runtime flags).
+Build-time configuration lives in `container-build.toml` (tool versions, build features). Runtime configuration lives in `container-run.toml` (VM resources, Claude flags).
 
 ## container-build.toml
 
@@ -16,9 +16,11 @@ python = "3.14"                 # Python version (Python image only)
 go = "1.26.0"                   # Go version (Go image only)
 golangci_lint = "v2.4.0"        # golangci-lint (Go image only)
 
+[builder]
+cpus = 2                        # CPUs for the builder VM
+memory = "4g"                   # Memory for the builder VM
+
 [features]
-claude_simple_mode = true       # Lean runtime — see Simple Mode below
-skip_permissions = "yolo"       # Permission mode — see Permission Modes below
 install_claude_agent_acp = false # Install ACP binary (for Zed integration)
 ```
 
@@ -36,9 +38,72 @@ install_claude_agent_acp = false # Install ACP binary (for Zed integration)
 
 Version changes require a rebuild (`./launch.sh --rebuild`).
 
-### [features] — Runtime Feature Flags
+### [builder] — Builder VM Resources
 
-Feature flags are read at every `launch.sh` invocation — no rebuild required unless noted.
+| Key | Default | Description |
+| --- | --- | --- |
+| `cpus` | `2` | CPUs allocated to the builder process |
+| `memory` | `"4g"` | Memory allocated to the builder process |
+
+**Resolution order** (highest priority wins):
+
+1. **Env vars:** `BUILD_CPUS`, `BUILD_MEMORY`
+2. **Build config:** `container-build.toml` `[builder]`
+3. **Defaults:** `cpus = 2`, `memory = "4g"`
+
+### [features] — Build Feature Flags
+
+---
+
+#### `install_claude_agent_acp`
+
+**Default:** `false`
+
+Install the `claude-agent-acp` binary for Zed ACP integration. Adds ~50MB to the image. Requires a rebuild.
+
+> **Note:** Zed ACP mode is currently not operational. Keep this `false` unless you are actively developing the ACP integration.
+
+## container-run.toml — Per-Project Runtime Configuration
+
+Place a `container-run.toml` file in your **project directory** to configure container VM resources and Claude runtime flags. This is separate from `container-build.toml` (which lives with the Container repo) because different projects have different runtime needs.
+
+```toml
+[resources]
+memory = "4g"
+cpus = 4
+
+[claude]
+claude_simple_mode = true
+claude_skip_permissions = "yolo"
+claude_additional_system_prompt = ""
+
+[workspace]
+additional_excludes = []
+
+[credentials]
+ssh_known_hosts = ["github.com"]
+```
+
+A template is provided at `container-run.example.toml`.
+
+### [resources] — VM Resources
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `memory` | `"2g"` | Container VM memory (e.g., `"2g"`, `"8g"`, `"512m"`) |
+| `cpus` | `4` | Number of CPUs for the container VM |
+
+**Resolution order** (highest priority wins):
+
+1. **CLI flags:** `--memory 8g --cpus 8`
+2. **Per-project config:** `$PROJECT/container-run.toml` `[resources]`
+3. **Defaults:** `memory = "2g"`, `cpus = 4`
+
+Override the config file path with `CONTAINER_RUN_CONFIG=/path/to/config.toml`.
+
+### [claude] — Runtime Feature Flags
+
+These flags are read at every `launch.sh` invocation — no rebuild required.
 
 ---
 
@@ -75,14 +140,13 @@ flowchart TD
 
 **To disable simple mode:**
 
-1. Set `claude_simple_mode = false` in `container-build.toml`
+1. Set `claude_simple_mode = false` in `container-run.toml`
 2. Ensure the image has Python 3.12+ and uv (the Python image already does)
 3. Configure MCP servers in `settings.json` if needed
-4. No rebuild required — this is a runtime flag
 
 ---
 
-#### `skip_permissions`
+#### `claude_skip_permissions`
 
 **Default:** `"yolo"`
 
@@ -90,7 +154,7 @@ Controls how Claude handles permission prompts inside the container.
 
 ```mermaid
 flowchart TD
-    Start["launch.sh reads skip_permissions"] --> Mode{"Value?"}
+    Start["launch.sh reads claude_skip_permissions"] --> Mode{"Value?"}
 
     Mode -->|'"yolo" (default)'| Yolo["--dangerously-skip-permissions"]
     Mode -->|'"plan"'| Plan["--permission-mode plan<br/>--allow-dangerously-skip-permissions"]
@@ -105,39 +169,52 @@ flowchart TD
 | --- | --- | --- |
 | `"yolo"` | `--dangerously-skip-permissions` | Skip all prompts, full autonomy |
 | `"plan"` | `--permission-mode plan --allow-dangerously-skip-permissions` | Start in plan mode; Claude can propose escalation |
-| `false` | *(none)* | Normal interactive prompts |
+| `"false"` | *(none)* | Normal interactive prompts |
 
 **Why "yolo" is safe:** The container is ephemeral and isolated. Changes stay inside unless you explicitly push via git. There is no risk to the host filesystem in copy mode (default).
 
 ---
 
-#### `install_claude_agent_acp`
+#### `claude_additional_system_prompt`
 
-**Default:** `false`
+**Default:** `""` (empty — no additional prompt)
 
-Install the `claude-agent-acp` binary for Zed ACP integration. Adds ~50MB to the image. Requires a rebuild.
-
-> **Note:** Zed ACP mode is currently not operational. Keep this `false` unless you are actively developing the ACP integration.
-
-## container-run.toml — Per-Project Runtime Resources
-
-Place a `container-run.toml` file in your **project directory** to configure the container VM resources. This is separate from `container-build.toml` (which lives with the Container repo) because different projects have different resource needs.
+Appends a project-specific system prompt after the built-in CONTAINER.md prompt. Useful for instructions that should apply to every Claude session in this project.
 
 ```toml
-[resources]
-memory = "4g"    # Memory for the container VM (e.g., "2g", "8g", "512m")
-cpus = 4         # Number of CPUs for the container VM
+[claude]
+claude_additional_system_prompt = "Always use pytest for testing. Prefer pathlib over os.path."
 ```
 
-A template is provided at `container-run.example.toml`.
+The built-in prompt (`You MUST read CONTAINER.md...`) is always injected first. This value adds a second `--append-system-prompt` after it.
 
-### Resolution order (highest priority wins)
+### [workspace] — Workspace Copy Settings
 
-1. **CLI flags:** `--memory 8g --cpus 8`
-2. **Per-project config:** `$PROJECT/container-run.toml` `[resources]`
-3. **Defaults:** `memory = "2g"`, `cpus = 4`
+| Key | Default | Description |
+| --- | --- | --- |
+| `additional_excludes` | `[]` | Additional tar `--exclude` patterns for workspace copy |
 
-Override the config file path with `CONTAINER_RUN_CONFIG=/path/to/config.toml`.
+The base exclude list (`.venv`, `node_modules`, `__pycache__`, `.DS_Store`, etc.) is always applied. This setting **adds** to it — it does not replace the defaults.
+
+```toml
+[workspace]
+additional_excludes = ["vendor", "dist", ".next"]
+```
+
+Patterns are passed directly to `tar --exclude`, so they follow tar's glob syntax.
+
+### [credentials] — Credential Settings
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `ssh_known_hosts` | `["github.com"]` | Git hosts to add to `known_hosts` via `ssh-keyscan` |
+
+By default, only `github.com` is scanned. Add hosts for GitHub Enterprise, GitLab, or other private Git servers.
+
+```toml
+[credentials]
+ssh_known_hosts = ["github.com", "gitlab.com", "git.internal.company.com"]
+```
 
 ### When to increase resources
 

@@ -56,7 +56,12 @@ if [[ -d /mnt/in/home/.ssh ]]; then
     cp /mnt/in/home/.ssh/config /home/sandbox/.ssh/ 2>/dev/null || true
     chmod 700 /home/sandbox/.ssh
     chmod 600 /home/sandbox/.ssh/* 2>/dev/null || true
-    ssh-keyscan -T 5 -t ed25519 github.com >> /home/sandbox/.ssh/known_hosts 2>/dev/null || true
+    # Keyscan hosts: SSH_KNOWN_HOSTS env (newline-separated) or default to github.com
+    _hosts="${SSH_KNOWN_HOSTS:-github.com}"
+    while IFS= read -r _host; do
+        [[ -z "$_host" ]] && continue
+        ssh-keyscan -T 5 -t ed25519 "$_host" >> /home/sandbox/.ssh/known_hosts 2>/dev/null || true
+    done <<< "$_hosts"
 fi
 if [[ -f /mnt/in/home/.gitconfig ]]; then
     echo "[entrypoint] Copying .gitconfig..." >&2
@@ -76,23 +81,31 @@ fi
 if [[ "${SANDBOX_COPY_MODE:-0}" == "1" ]]; then
     echo "[entrypoint] Copy mode: copying workspace (filtering build artifacts)..." >&2
     mkdir -p /workspace
-    tar -C /mnt/in/workspace \
-        --exclude='.venv' \
-        --exclude='venv' \
-        --exclude='node_modules' \
-        --exclude='__pycache__' \
-        --exclude='*.pyc' \
-        --exclude='.DS_Store' \
-        --exclude='.ruff_cache' \
-        --exclude='.mypy_cache' \
-        --exclude='.pytest_cache' \
-        --exclude='.fastembed_cache' \
-        --exclude='.vscode' \
-        --exclude='.github' \
-        --exclude='.codex' \
-        --exclude='.codanna' \
-        --exclude='bin/linux' \
-        -cf - . | tar -C /workspace -xf -
+    EXCLUDE_ARGS=(
+        --exclude='.venv'
+        --exclude='venv'
+        --exclude='node_modules'
+        --exclude='__pycache__'
+        --exclude='*.pyc'
+        --exclude='.DS_Store'
+        --exclude='.ruff_cache'
+        --exclude='.mypy_cache'
+        --exclude='.pytest_cache'
+        --exclude='.fastembed_cache'
+        --exclude='.vscode'
+        --exclude='.github'
+        --exclude='.codex'
+        --exclude='.codanna'
+        --exclude='bin/linux'
+    )
+    # Append project-specific excludes from EXTRA_EXCLUDES env (newline-separated)
+    if [[ -n "${EXTRA_EXCLUDES:-}" ]]; then
+        while IFS= read -r _pattern; do
+            [[ -z "$_pattern" ]] && continue
+            EXCLUDE_ARGS+=("--exclude=$_pattern")
+        done <<< "$EXTRA_EXCLUDES"
+    fi
+    tar -C /mnt/in/workspace "${EXCLUDE_ARGS[@]}" -cf - . | tar -C /workspace -xf -
 fi
 
 # ── 4. Generate CONTAINER.md ──────────────────────────────────────────────────

@@ -30,7 +30,7 @@ Containers are ephemeral by default — all local changes are lost on exit. Push
 - After toggling `install_claude_agent_acp`
 - To pick up a new Claude Code binary (`claude_code = "latest"` resolves at build time)
 
-Feature flags (`claude_simple_mode`, `skip_permissions`) are runtime — no rebuild needed.
+Feature flags (`claude_simple_mode`, `claude_skip_permissions`) live in `container-run.toml` — no rebuild needed.
 
 ### Builder Resources
 
@@ -91,7 +91,7 @@ sequenceDiagram
 | `BUILD_MEMORY` | `4g` | Memory for image builder |
 | `CONTAINER_BUILD_CONFIG` | `./container-build.toml` | Build config path override |
 | `CONTAINER_RUN_CONFIG` | `$PROJECT/container-run.toml` | Per-project runtime config path override |
-| `CLAUDE_CODE_SIMPLE` | `1` (from config) | Simple mode flag (see [CONFIGURATION.md](CONFIGURATION.md#claude_simple_mode)) |
+| `CLAUDE_CODE_SIMPLE` | `1` (from run config) | Simple mode flag (see [CONFIGURATION.md](CONFIGURATION.md#claude_simple_mode)) |
 
 ### Workspace Isolation
 

@@ -12,8 +12,6 @@ CLAUDE_AUTO_UPDATE=0
 LANG_TARGET="${CONTAINER_LANG:-python}"
 EXTRA_CLAUDE_ARGS=()
 
-BUILD_CPUS="${BUILD_CPUS:-2}"
-BUILD_MEMORY="${BUILD_MEMORY:-4g}"
 CONFIG_FILE="${CONTAINER_BUILD_CONFIG:-$SCRIPT_DIR/container-build.toml}"
 
 RUN_MEMORY=""
@@ -42,19 +40,21 @@ Options:
 
 Environment:
   CONTAINER_LANG           Language target (default: python)
-  BUILD_CPUS               CPUs for builder (default: 2)
-  BUILD_MEMORY             Memory for builder (default: 4g)
+  BUILD_CPUS               CPUs for builder (overrides [builder] config)
+  BUILD_MEMORY             Memory for builder (overrides [builder] config)
   CONTAINER_BUILD_CONFIG   Build config path override
   CONTAINER_RUN_CONFIG     Per-project runtime config path override
   CLAUDE_CODE_SIMPLE       Set to 1 (default via claude_simple_mode in config)
                            to disable hooks, MCP servers, attachments, and
                            CLAUDE.md files inside the container.
                            To disable: set claude_simple_mode = false in
-                           container-build.toml (requires Python 3.12+ and uv
+                           container-run.toml (requires Python 3.12+ and uv
                            for hooks)
 
-Config (container-build.toml [features]):
-  skip_permissions         "yolo" (default): --dangerously-skip-permissions
+Config (container-run.toml [claude]):
+  claude_simple_mode       true (default): lean runtime — no hooks, MCP, CLAUDE.md
+                           false: full-featured (needs Python 3.12+ and uv)
+  claude_skip_permissions  "yolo" (default): --dangerously-skip-permissions
                            "plan": --permission-mode plan
                                    --allow-dangerously-skip-permissions
                            false:  normal interactive prompts
@@ -81,15 +81,61 @@ toml_get() {
             if (line ~ "^[ \\t]*" key "[ \\t]*=") {
                 sub(/^[^=]*=/, "", line)
                 line = trim(line)
-                if (line ~ /^".*"$/) {
+                if (line ~ /^"/) {
+                    # Quoted value: extract content between first pair of quotes
                     sub(/^"/, "", line)
-                    sub(/"$/, "", line)
+                    sub(/".*/, "", line)
+                } else {
+                    # Unquoted value: strip everything from first # onward
+                    sub(/[ \t]*#.*$/, "", line)
+                    line = rtrim(line)
                 }
                 print line
                 exit
             }
         }
     ' "$file"
+}
+
+toml_get_array() {
+    local section="$1"
+    local key="$2"
+    local file="$3"
+    local raw
+    raw="$(awk -v section="$section" -v key="$key" '
+        function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
+        function rtrim(s) { sub(/[ \t\r\n]+$/, "", s); return s }
+        function trim(s) { return rtrim(ltrim(s)) }
+
+        /^[ \t]*#/ { next }
+        /^[ \t]*\[/ {
+            in_section = ($0 ~ "^[ \\t]*\\[" section "\\][ \\t]*$")
+            next
+        }
+
+        in_section {
+            line = $0
+            if (line ~ "^[ \\t]*" key "[ \\t]*=") {
+                sub(/^[^=]*=/, "", line)
+                line = trim(line)
+                # Strip inline comment outside the array
+                sub(/\][ \t]*#.*$/, "]", line)
+                print line
+                exit
+            }
+        }
+    ' "$file")"
+
+    [[ -z "$raw" ]] && return
+
+    # Strip surrounding brackets and split on comma
+    raw="${raw#\[}"
+    raw="${raw%\]}"
+    local IFS=','
+    for elem in $raw; do
+        elem="$(echo "$elem" | sed 's/^[[:space:]]*"//;s/"[[:space:]]*$//')"
+        [[ -n "$elem" ]] && printf '%s\n' "$elem"
+    done
 }
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
@@ -222,8 +268,18 @@ build_image() {
         echo "WARNING: Build config '$cfg' not found. Using built-in defaults." >&2
     fi
 
+    # Builder resources: env var > TOML [builder] > hardcoded default
+    local build_cpus="${BUILD_CPUS:-}"
+    local build_memory="${BUILD_MEMORY:-}"
+    if [[ -f "$cfg" ]]; then
+        [[ -z "$build_cpus" ]]   && build_cpus="$(toml_get builder cpus "$cfg" || true)"
+        [[ -z "$build_memory" ]] && build_memory="$(toml_get builder memory "$cfg" || true)"
+    fi
+    build_cpus="${build_cpus:-2}"
+    build_memory="${build_memory:-4g}"
+
     echo "==> Starting builder..."
-    container builder start --cpus "$BUILD_CPUS" --memory "$BUILD_MEMORY"
+    container builder start --cpus "$build_cpus" --memory "$build_memory"
     echo "==> Building image: $IMAGE (target: $LANG_TARGET, config: $cfg)"
     container build -t "$IMAGE" \
         --target "$LANG_TARGET" \
@@ -249,28 +305,42 @@ elif ! image_exists; then
     exit 1
 fi
 
-# ── Read runtime flags from config ────────────────────────────────────────────
+# ── Read per-project runtime config ──────────────────────────────────────────
+PROJECT_RUN_CONFIG="${CONTAINER_RUN_CONFIG:-$PROJECT/container-run.toml}"
 CLAUDE_SIMPLE_MODE="1"
 SKIP_PERMISSIONS="yolo"
-if [[ -f "$CONFIG_FILE" ]]; then
-    _simple_raw="$(toml_get features claude_simple_mode "$CONFIG_FILE" || true)"
+EXTRA_EXCLUDES=""
+SSH_KNOWN_HOSTS=""
+CLAUDE_ADDITIONAL_SYSTEM_PROMPT=""
+if [[ -f "$PROJECT_RUN_CONFIG" ]]; then
+    [[ -z "$RUN_MEMORY" ]] && RUN_MEMORY="$(toml_get resources memory "$PROJECT_RUN_CONFIG" || true)"
+    [[ -z "$RUN_CPUS" ]]   && RUN_CPUS="$(toml_get resources cpus "$PROJECT_RUN_CONFIG" || true)"
+
+    _simple_raw="$(toml_get claude claude_simple_mode "$PROJECT_RUN_CONFIG" || true)"
     case "${_simple_raw,,}" in
         false|0|no|off) CLAUDE_SIMPLE_MODE="0" ;;
     esac
-    _skip_raw="$(toml_get features skip_permissions "$CONFIG_FILE" || true)"
+    _skip_raw="$(toml_get claude claude_skip_permissions "$PROJECT_RUN_CONFIG" || true)"
     case "${_skip_raw,,}" in
         yolo|true|1|yes|on) SKIP_PERMISSIONS="yolo" ;;
         plan)               SKIP_PERMISSIONS="plan" ;;
         false|0|no|off)     SKIP_PERMISSIONS="off" ;;
         *)                  SKIP_PERMISSIONS="yolo" ;;
     esac
-fi
 
-# ── Read per-project runtime config ──────────────────────────────────────────
-PROJECT_RUN_CONFIG="${CONTAINER_RUN_CONFIG:-$PROJECT/container-run.toml}"
-if [[ -f "$PROJECT_RUN_CONFIG" ]]; then
-    [[ -z "$RUN_MEMORY" ]] && RUN_MEMORY="$(toml_get resources memory "$PROJECT_RUN_CONFIG" || true)"
-    [[ -z "$RUN_CPUS" ]]   && RUN_CPUS="$(toml_get resources cpus "$PROJECT_RUN_CONFIG" || true)"
+    CLAUDE_ADDITIONAL_SYSTEM_PROMPT="$(toml_get claude claude_additional_system_prompt "$PROJECT_RUN_CONFIG" || true)"
+
+    # [workspace] additional_excludes — newline-separated list
+    _excludes_lines="$(toml_get_array workspace additional_excludes "$PROJECT_RUN_CONFIG" || true)"
+    if [[ -n "$_excludes_lines" ]]; then
+        EXTRA_EXCLUDES="$_excludes_lines"
+    fi
+
+    # [credentials] ssh_known_hosts — newline-separated list
+    _hosts_lines="$(toml_get_array credentials ssh_known_hosts "$PROJECT_RUN_CONFIG" || true)"
+    if [[ -n "$_hosts_lines" ]]; then
+        SSH_KNOWN_HOSTS="$_hosts_lines"
+    fi
 fi
 
 # Defaults (CLI flags > container-run.toml > defaults)
@@ -289,6 +359,11 @@ esac
 
 # Inject system prompt to ensure Claude reads CONTAINER.md at session start
 EXTRA_CLAUDE_ARGS=("--append-system-prompt" "You MUST read CONTAINER.md in the workspace root before doing anything else." "${EXTRA_CLAUDE_ARGS[@]+"${EXTRA_CLAUDE_ARGS[@]}"}")
+
+# Append project-specific system prompt if configured
+if [[ -n "$CLAUDE_ADDITIONAL_SYSTEM_PROMPT" ]]; then
+    EXTRA_CLAUDE_ARGS=("--append-system-prompt" "$CLAUDE_ADDITIONAL_SYSTEM_PROMPT" "${EXTRA_CLAUDE_ARGS[@]+"${EXTRA_CLAUDE_ARGS[@]}"}")
+fi
 
 # ── Construct mount arguments ─────────────────────────────────────────────────
 if [[ "$COPY_MODE" == "1" ]]; then
@@ -337,6 +412,14 @@ RUN_ARGS=(
 
 if [[ "$CLAUDE_SIMPLE_MODE" == "1" ]]; then
     RUN_ARGS+=(-e "CLAUDE_CODE_SIMPLE=1")
+fi
+
+if [[ -n "$EXTRA_EXCLUDES" ]]; then
+    RUN_ARGS+=(-e "EXTRA_EXCLUDES=${EXTRA_EXCLUDES}")
+fi
+
+if [[ -n "$SSH_KNOWN_HOSTS" ]]; then
+    RUN_ARGS+=(-e "SSH_KNOWN_HOSTS=${SSH_KNOWN_HOSTS}")
 fi
 
 RUN_ARGS+=("$IMAGE" "${EXTRA_CLAUDE_ARGS[@]+"${EXTRA_CLAUDE_ARGS[@]}"}")
