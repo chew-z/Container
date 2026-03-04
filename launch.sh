@@ -40,6 +40,18 @@ Environment:
   BUILD_CPUS               CPUs for builder (default: 2)
   BUILD_MEMORY             Memory for builder (default: 4g)
   CONTAINER_BUILD_CONFIG   Build config path override
+  CLAUDE_CODE_SIMPLE       Set to 1 (default via claude_simple_mode in config)
+                           to disable hooks, MCP servers, attachments, and
+                           CLAUDE.md files inside the container.
+                           To disable: set claude_simple_mode = false in
+                           container-build.toml (requires Python 3.12+ and uv
+                           for hooks)
+
+Config (container-build.toml [features]):
+  skip_permissions         "yolo" (default): --dangerously-skip-permissions
+                           "plan": --permission-mode plan
+                                   --allow-dangerously-skip-permissions
+                           false:  normal interactive prompts
 EOF
 }
 
@@ -191,6 +203,7 @@ build_image() {
             true|1|yes|on) install_acp="1" ;;
             *) install_acp="0" ;;
         esac
+
     else
         echo "WARNING: Build config '$cfg' not found. Using built-in defaults." >&2
     fi
@@ -222,6 +235,36 @@ elif ! image_exists; then
     exit 1
 fi
 
+# ── Read runtime flags from config ────────────────────────────────────────────
+CLAUDE_SIMPLE_MODE="1"
+SKIP_PERMISSIONS="yolo"
+if [[ -f "$CONFIG_FILE" ]]; then
+    _simple_raw="$(toml_get features claude_simple_mode "$CONFIG_FILE" || true)"
+    case "${_simple_raw,,}" in
+        false|0|no|off) CLAUDE_SIMPLE_MODE="0" ;;
+    esac
+    _skip_raw="$(toml_get features skip_permissions "$CONFIG_FILE" || true)"
+    case "${_skip_raw,,}" in
+        yolo|true|1|yes|on) SKIP_PERMISSIONS="yolo" ;;
+        plan)               SKIP_PERMISSIONS="plan" ;;
+        false|0|no|off)     SKIP_PERMISSIONS="off" ;;
+        *)                  SKIP_PERMISSIONS="yolo" ;;
+    esac
+fi
+
+# Compose permission flags for claude
+case "$SKIP_PERMISSIONS" in
+    yolo)
+        EXTRA_CLAUDE_ARGS=("--dangerously-skip-permissions" "${EXTRA_CLAUDE_ARGS[@]+"${EXTRA_CLAUDE_ARGS[@]}"}")
+        ;;
+    plan)
+        EXTRA_CLAUDE_ARGS=("--permission-mode" "plan" "--allow-dangerously-skip-permissions" "${EXTRA_CLAUDE_ARGS[@]+"${EXTRA_CLAUDE_ARGS[@]}"}")
+        ;;
+esac
+
+# Inject system prompt to ensure Claude reads CONTAINER.md at session start
+EXTRA_CLAUDE_ARGS=("--append-system-prompt" "You MUST read CONTAINER.md in the workspace root before doing anything else." "${EXTRA_CLAUDE_ARGS[@]+"${EXTRA_CLAUDE_ARGS[@]}"}")
+
 # ── Construct mount arguments ─────────────────────────────────────────────────
 if [[ "$COPY_MODE" == "1" ]]; then
     WORKSPACE_MOUNT="type=bind,source=${PROJECT},target=/mnt/in/workspace,readonly"
@@ -249,17 +292,25 @@ echo "==> Launching Claude Code for: $PROJECT"
 echo "==> Container: $CONTAINER_NAME"
 echo "==> Image: $IMAGE"
 
-exec container run -it --rm \
-    --name "$CONTAINER_NAME" \
-    --arch arm64 \
-    --mount "$WORKSPACE_MOUNT" \
-    --mount "type=bind,source=${HOME}/.claude,target=/mnt/in/claude_dir,readonly" \
-    --mount "type=bind,source=${HOME},target=/mnt/in/home,readonly" \
-    -e "HOME=/home/sandbox" \
-    -e "CLAUDE_CREDS=${CLAUDE_CREDS}" \
-    -e "SANDBOX_COPY_MODE=${COPY_MODE}" \
-    -e "CLAUDE_AUTO_UPDATE=${CLAUDE_AUTO_UPDATE}" \
-    -e "ANTHROPIC_API_KEY=" \
-    -e "GH_TOKEN=${GH_TOKEN}" \
-    "$IMAGE" \
-    "${EXTRA_CLAUDE_ARGS[@]+"${EXTRA_CLAUDE_ARGS[@]}"}"
+RUN_ARGS=(
+    container run -it --rm
+    --name "$CONTAINER_NAME"
+    --arch arm64
+    --mount "$WORKSPACE_MOUNT"
+    --mount "type=bind,source=${HOME}/.claude,target=/mnt/in/claude_dir,readonly"
+    --mount "type=bind,source=${HOME},target=/mnt/in/home,readonly"
+    -e "HOME=/home/sandbox"
+    -e "CLAUDE_CREDS=${CLAUDE_CREDS}"
+    -e "SANDBOX_COPY_MODE=${COPY_MODE}"
+    -e "CLAUDE_AUTO_UPDATE=${CLAUDE_AUTO_UPDATE}"
+    -e "ANTHROPIC_API_KEY="
+    -e "GH_TOKEN=${GH_TOKEN}"
+)
+
+if [[ "$CLAUDE_SIMPLE_MODE" == "1" ]]; then
+    RUN_ARGS+=(-e "CLAUDE_CODE_SIMPLE=1")
+fi
+
+RUN_ARGS+=("$IMAGE" "${EXTRA_CLAUDE_ARGS[@]+"${EXTRA_CLAUDE_ARGS[@]}"}")
+
+exec "${RUN_ARGS[@]}"

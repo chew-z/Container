@@ -1,55 +1,65 @@
-# Container Environment (auto-generated)
+# Container Sandbox (auto-generated)
 
-You are running inside a **Linux arm64** container (Debian bookworm), NOT macOS.
-This is an isolated copy of the project — changes here do NOT affect the host.
+This is an **ephemeral Linux arm64 sandbox** (Debian bookworm) for Python development.
+The container is destroyed on exit — all local changes are lost.
 
-## Runtime
+**The only way to persist your work is to commit and push to the remote repository
+(or create a pull request via `gh pr create`).**
 
-- Language image: `python`
-- Python version: `{{PYTHON_VERSION}}`
-- Claude Code version: `{{CLAUDE_VERSION}}`
+You have full freedom to experiment: install packages, modify files, run tests,
+break things. Nothing here affects the host or any shared environment.
 
-<if HAS_ACP>
-- claude-agent-acp: installed
-</if>
-<if !HAS_ACP>
-- claude-agent-acp: not installed in this image
-</if>
+## Environment
+
+- User: `sandbox` (home: `/home/sandbox`)
+- Project files: `/workspace` (isolated copy of the host project)
+- OS: Debian bookworm, Linux arm64
+- Python: `{{PYTHON_VERSION}}`
+- Claude Code: `{{CLAUDE_VERSION}}`
+
+## Permissions
+
+This sandbox may run with permission prompts disabled or with plan-mode
+escalation enabled. Either way, you can work freely — the environment is
+isolated and ephemeral. If you need to escalate permissions during a plan-mode
+session, inform the user and they can approve.
 
 ## Available Tools
 
 - git, gh (GitHub CLI), jq, ripgrep, fd, fzf, uv
-- openssh-client (SSH keys are pre-configured for github.com)
+- openssh-client (SSH keys pre-configured for github.com)
+- You can install additional packages with `sudo apt-get install -y <package>`
+  or Python packages with `uv pip install <package>`
 
-## Python Projects
+## Python Development
 
-Follow these steps **before** running any Python code:
+### Virtual environment setup
 
-1. **Create a Linux virtualenv** (the host `.venv/` contains macOS binaries — do not use it):
-   ```bash
-   uv venv .venv && source .venv/bin/activate
-   ```
+The host `.venv/` contains macOS binaries — do not use it. Create a Linux virtualenv:
 
-2. **Install dependencies:**
-   ```bash
-   uv pip install -r requirements.txt   # or: uv pip install -e .
-   ```
+```bash
+uv venv .venv && source .venv/bin/activate
+uv pip install -r requirements.txt   # or: uv pip install -e .
+```
 
-3. **Fix `.env` loading** — `ANTHROPIC_API_KEY` is set to an empty string in this
-   container (for Claude Code OAuth). `load_dotenv()` will NOT override it.
-   Change every `load_dotenv()` call to:
-   ```python
-   load_dotenv(override=True)
-   ```
+### ANTHROPIC_API_KEY conflict
 
-4. **Set `ANTHROPIC_BASE_URL`** — if `ANTHROPIC_BASE_URL` is set to a proxy in the
-   container environment, add this line to `.env`:
-   ```
-   ANTHROPIC_BASE_URL=https://api.anthropic.com
-   ```
-   `load_dotenv(override=True)` from step 3 will restore it.
+`ANTHROPIC_API_KEY` is set to an empty string in this container (for Claude Code
+OAuth). If your project uses `load_dotenv()`, it will NOT override the empty value.
+Change every `load_dotenv()` call to:
 
-## Build Artifacts
+```python
+load_dotenv(override=True)
+```
 
-All compiled binaries and native extensions are Linux arm64.
-This container is ephemeral — it is destroyed on exit.
+If `ANTHROPIC_BASE_URL` is set to a proxy in the container environment, add this
+to `.env`:
+
+```
+ANTHROPIC_BASE_URL=https://api.anthropic.com
+```
+
+### Build artifacts
+
+All compiled extensions and native binaries are Linux arm64 — they will not run
+on macOS.

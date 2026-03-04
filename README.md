@@ -117,20 +117,43 @@ flowchart TB
 
 | Variable                 | Default                  | Description                |
 | ------------------------ | ------------------------ | -------------------------- |
-| `CONTAINER_LANG`         | `python`                 | Language target            |
-| `BUILD_CPUS`             | 2                        | CPUs for image builder     |
-| `BUILD_MEMORY`           | 4g                       | Memory for image builder   |
-| `CONTAINER_BUILD_CONFIG` | `./container-build.toml` | Build config path override |
+| `CONTAINER_LANG`         | `python`                 | Language target                          |
+| `BUILD_CPUS`             | 2                        | CPUs for image builder                   |
+| `BUILD_MEMORY`           | 4g                       | Memory for image builder                 |
+| `CONTAINER_BUILD_CONFIG` | `./container-build.toml` | Build config path override               |
+| `CLAUDE_CODE_SIMPLE`     | `1` (from config)        | Disables hooks, MCP servers, attachments |
 
 ### Build config (`container-build.toml`)
 
 `launch.sh --rebuild` reads build versions/features from TOML. Current keys:
 
 - `[versions]`: `claude_code`, `claude_agent_acp`, `gh`, `fd`, `python`, `go`, `golangci_lint`
-- `[features]`: `install_claude_agent_acp` (`true`/`false`)
+- `[features]`: `claude_simple_mode` (`true`/`false`), `install_claude_agent_acp` (`true`/`false`)
 
-Default policy: `install_claude_agent_acp = false` (lean general sandbox image).
-If you use Zed ACP, rebuild with it enabled in config.
+Default policies:
+
+- `claude_simple_mode = true` — sets `CLAUDE_CODE_SIMPLE=1` at container runtime. See [Simple Mode](#simple-mode) below.
+- `install_claude_agent_acp = false` — lean general sandbox image. If you use Zed ACP, rebuild with it enabled.
+
+### Simple Mode
+
+By default, containers run with `CLAUDE_CODE_SIMPLE=1`. This is a Claude Code built-in flag that disables hooks, MCP servers, attachments, and CLAUDE.md processing at runtime. The entrypoint also skips copying `hooks` and `agents` directories from `~/.claude/` since they would be unused.
+
+**Why:** The Golang image has no Python/uv, which hooks require. Rather than adding Python to every image, simple mode avoids startup errors.
+
+**What still works in simple mode:**
+- All core Claude Code functionality (code reading, editing, terminal, git)
+- `settings.json`, `CLAUDE.md`, commands, skills, plugins (copied from `~/.claude/`)
+- Project-local `.claude/` directory (copied with workspace)
+- Credentials, SSH keys, GitHub token
+- `CONTAINER.md` generation
+
+**To disable simple mode** (enable full features):
+
+1. Set `claude_simple_mode = false` in `container-build.toml`
+2. Ensure the image has Python 3.12+ and uv (the Python image already does)
+3. Configure MCP servers in `settings.json` if needed
+4. Rebuild is not required — this is a runtime flag
 
 ### Mode 2: Zed ACP (`zed-claude-acp.sh`)
 

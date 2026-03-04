@@ -1,30 +1,38 @@
-# Container Environment (auto-generated)
+# Container Sandbox (auto-generated)
 
-You are running inside a **Linux arm64** container (Debian bookworm), NOT macOS.
-This is an isolated copy of the project — changes here do NOT affect the host.
+This is an **ephemeral Linux arm64 sandbox** (Debian bookworm) for Go development.
+The container is destroyed on exit — all local changes are lost.
 
-## Runtime
+**The only way to persist your work is to commit and push to the remote repository
+(or create a pull request via `gh pr create`).**
 
-- Language image: `golang`
-- Go version: `{{GO_VERSION}}`
-- golangci-lint version: `{{GOLANGCI_LINT_VERSION}}`
-- Claude Code version: `{{CLAUDE_VERSION}}`
+You have full freedom to experiment: install packages, modify files, run tests,
+break things. Nothing here affects the host or any shared environment.
 
-<if HAS_ACP>
-- claude-agent-acp: installed
-</if>
-<if !HAS_ACP>
-- claude-agent-acp: not installed in this image
-</if>
+## Environment
 
-## Go
+- User: `sandbox` (home: `/home/sandbox`)
+- Project files: `/workspace` (isolated copy of the host project)
+- OS: Debian bookworm, Linux arm64
+- Go: `{{GO_VERSION}}`
+- golangci-lint: `{{GOLANGCI_LINT_VERSION}}`
+- Claude Code: `{{CLAUDE_VERSION}}`
 
-`go build` produces Linux arm64 binaries. In this isolated workspace copy that is
-safe by default, but keep output paths explicit when needed:
+## Permissions
 
-```bash
-go build -o ./bin/linux/ ./...
-```
+This sandbox may run with permission prompts disabled or with plan-mode
+escalation enabled. Either way, you can work freely — the environment is
+isolated and ephemeral. If you need to escalate permissions during a plan-mode
+session, inform the user and they can approve.
+
+## Available Tools
+
+- git, gh (GitHub CLI), jq, ripgrep, fd, fzf
+- openssh-client (SSH keys pre-configured for github.com)
+- You can install additional packages with `sudo apt-get install -y <package>`
+  or Go tools with `go install <module>@latest`
+
+## Go Development
 
 ### Installed Go tooling
 
@@ -34,7 +42,21 @@ go build -o ./bin/linux/ ./...
 - `gotestsum`
 - `govulncheck`
 
-### Recommended inner loop
+<if HAS_GOLANGCI_CONFIG>
+Host `~/.golangci.yml` / `~/.golangci.yaml` was copied to `/home/sandbox/`.
+</if>
+
+### Building
+
+Build binaries to the project `bin/` directory:
+
+```bash
+go build -o ./bin/ ./...
+```
+
+All compiled binaries are Linux arm64 — they will not run on macOS.
+
+### Recommended workflow
 
 ```bash
 goimports -w .
@@ -42,12 +64,3 @@ golangci-lint run ./...
 gotestsum -- -race ./...
 govulncheck ./...
 ```
-
-<if HAS_GOLANGCI_CONFIG>
-Host `~/.golangci.yml` / `~/.golangci.yaml` was copied to `/home/sandbox/`.
-</if>
-
-## Build Artifacts
-
-All compiled binaries and native extensions are Linux arm64.
-This container is ephemeral — it is destroyed on exit.

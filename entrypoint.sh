@@ -15,15 +15,24 @@ if [[ -d /mnt/in/claude_dir ]]; then
     echo "[entrypoint] Copying ~/.claude config (essentials only)..." >&2
     mkdir -p /home/sandbox/.claude
 
-    # Top-level config files
-    for f in settings.json CLAUDE.md claude-devtools-config.json; do
+    # Config files
+    for f in settings.json CLAUDE.md; do
         [[ -f /mnt/in/claude_dir/$f ]] && cp -p "/mnt/in/claude_dir/$f" "/home/sandbox/.claude/$f"
     done
 
-    # Essential directories
-    for d in commands hooks skills plugins statsig; do
+    # Directories — always needed
+    for d in commands skills plugins statsig; do
         [[ -d /mnt/in/claude_dir/$d ]] && cp -rp "/mnt/in/claude_dir/$d" "/home/sandbox/.claude/$d"
     done
+
+    # Hooks and agents — skipped in simple mode (hooks require Python/uv)
+    if [[ "${CLAUDE_CODE_SIMPLE:-0}" != "1" ]]; then
+        for d in hooks agents; do
+            [[ -d /mnt/in/claude_dir/$d ]] && cp -rp "/mnt/in/claude_dir/$d" "/home/sandbox/.claude/$d"
+        done
+    else
+        echo "[entrypoint] Simple mode: skipping hooks, agents" >&2
+    fi
 fi
 
 # ── 2. Copy .claude.json from host home ───────────────────────────────────────

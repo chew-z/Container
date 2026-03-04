@@ -12,5 +12,23 @@ go = "1.26.0"
 golangci_lint = "v2.4.0"
 
 [features]
+# CLAUDE_CODE_SIMPLE=1 at runtime — disables hooks, MCP servers, attachments,
+# and CLAUDE.md files inside the container.
+#
+# To disable simple mode set claude_simple_mode = false, then:
+#   - Ensure the image has Python 3.12+ and uv (needed for hooks)
+#   - Configure MCP servers in settings.json if desired
+#   - Hooks from ~/.claude/hooks will be copied into the container
+#
+claude_simple_mode = true
+# Permission mode for Claude inside the container. Safe because the sandbox
+# is ephemeral and isolated.
+#
+#   "yolo"  — --dangerously-skip-permissions (skip all prompts, full autonomy)
+#   "plan"  — --permission-mode plan --allow-dangerously-skip-permissions
+#             (start in plan mode, Claude can propose escalation to user)
+#   false   — normal interactive prompts (no special flags)
+#
+skip_permissions = "yolo"
 # Default OFF per project decision: general sandbox image does not need ACP.
 install_claude_agent_acp = false
