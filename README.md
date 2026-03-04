@@ -86,9 +86,13 @@ flowchart TB
 | `claudecode-python` | `./launch.sh --rebuild` |
 | `claudecode-golang` | `./launch.sh --rebuild --lang golang` |
 
-## Zed ACP Mode (Not Operational)
+## Zed ACP Mode (On Hold)
 
-> **Warning:** Zed ACP integration (`zed-claude-acp.sh`) is currently not operational and will be reworked. The script and configuration exist but should not be relied upon. See [RUNNING.md](RUNNING.md#zed-acp-mode-not-operational) for details on the intended design.
+> **Blocked by upstream bug in `claude-agent-acp` v0.20.1 static binary (linux-arm64).**
+>
+> The ACP static binary (Bun SEA) crashes with a JavaScript TDZ error (`Cannot access 'z4' before initialization`) during `session/prompt`. The bug is in the binary's `--cli` mode — a code path used only by the static build. The Homebrew (Node.js) distribution of the same version works fine on macOS because it uses the SDK's `cli.js` module directly instead of `--cli`.
+>
+> `zed-claude-acp.sh` itself is correct and ready — it's waiting for a fixed ACP binary. Track the issue at [zed-industries/claude-agent-acp](https://github.com/zed-industries/claude-agent-acp/issues).
 
 ## Troubleshooting
 
