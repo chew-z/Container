@@ -77,9 +77,10 @@ if [[ "${SANDBOX_COPY_MODE:-0}" == "1" ]]; then
 fi
 
 # ── 4. Generate CONTAINER.md ──────────────────────────────────────────────────
-# Dynamic context file so Claude knows it's in a Linux container.
+# Dynamic context file — content adapts to the language target installed.
 echo "[entrypoint] Generating CONTAINER.md..." >&2
-cat > /workspace/CONTAINER.md << 'CONTAINERMD'
+{
+cat << 'HEADER'
 # Container Environment (auto-generated)
 
 You are running inside a **Linux arm64** container (Debian bookworm), NOT macOS.
@@ -89,48 +90,59 @@ This is an isolated copy of the project — changes here do NOT affect the host.
 
 - git, gh (GitHub CLI), jq, ripgrep, fd, fzf, uv
 - openssh-client (SSH keys are pre-configured for github.com)
+HEADER
 
-## Python
+if command -v python3 &>/dev/null; then
+cat << 'PYTHON'
 
-If this is a Python project, the host `.venv/` was excluded (macOS binaries).
-Create a fresh Linux virtual environment:
+## Python Projects
 
-```bash
-uv venv .venv && source .venv/bin/activate
-uv pip install -r requirements.txt
-```
+Follow these steps **before** running any Python code:
 
-## Anthropic API Environment
+1. **Create a Linux virtualenv** (the host `.venv/` contains macOS binaries — do not use it):
+   ```bash
+   uv venv .venv && source .venv/bin/activate
+   ```
 
-`ANTHROPIC_API_KEY` is set to an **empty string** in this container so that
-Claude Code uses OAuth authentication. If your Python scripts call the
-Anthropic SDK directly, the empty env var takes precedence over `.env` and
-causes a `TypeError`.
+2. **Install dependencies:**
+   ```bash
+   uv pip install -r requirements.txt   # or: uv pip install -e .
+   ```
 
-**Fix:** use `load_dotenv(override=True)` so the real key from `.env` wins,
-or pass `api_key=` explicitly to the `Anthropic()` client.
+3. **Fix `.env` loading** — `ANTHROPIC_API_KEY` is set to an empty string in this
+   container (for Claude Code OAuth). `load_dotenv()` will NOT override it.
+   Change every `load_dotenv()` call to:
+   ```python
+   load_dotenv(override=True)
+   ```
 
-If `ANTHROPIC_BASE_URL` is set (e.g. to a proxy for Claude Code), Python scripts
-that call the Anthropic API directly must reset it:
+4. **Set `ANTHROPIC_BASE_URL`** — if `ANTHROPIC_BASE_URL` is set to a proxy in the
+   container environment, add this line to `.env`:
+   ```
+   ANTHROPIC_BASE_URL=https://api.anthropic.com
+   ```
+   `load_dotenv(override=True)` from step 3 will restore it.
+PYTHON
+fi
 
-\`\`\`python
-import os
-os.environ.pop("ANTHROPIC_BASE_URL", None)   # remove proxy URL
-\`\`\`
-
-Or set `ANTHROPIC_BASE_URL=https://api.anthropic.com` in your `.env` alongside
-the API key, and use `load_dotenv(override=True)` to restore both.
+if command -v go &>/dev/null; then
+cat << 'GOLANG'
 
 ## Go
 
 `go build` produces Linux arm64 binaries. This is an isolated container so there
 are no cross-platform concerns — build normally.
+GOLANG
+fi
+
+cat << 'FOOTER'
 
 ## Build Artifacts
 
 All compiled binaries and native extensions are Linux arm64.
 This container is ephemeral — it is destroyed on exit.
-CONTAINERMD
+FOOTER
+} > /workspace/CONTAINER.md
 
 # ── 5. Change to workspace ──────────────────────────────────────────────────
 echo "[entrypoint] Starting Claude Code in /workspace..." >&2

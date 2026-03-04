@@ -289,33 +289,40 @@ The workspace is bind-mounted read-write — every file change is visible to the
 ## Important Notes
 
 - All binaries you build or install are **Linux arm64** — they will not run on macOS.
-- \`ANTHROPIC_API_KEY\` is deliberately set to an empty string in this container so that
-  Claude Code uses OAuth authentication. If your Python scripts need the API key from
-  \`.env\`, you **must** use \`load_dotenv(override=True)\` — otherwise the empty env var
-  takes precedence and the key from \`.env\` is silently ignored.
-- \`ANTHROPIC_BASE_URL\` is set to a custom proxy for Claude Code. Python scripts that
-  call the Anthropic API directly should either delete it from the environment
-  (\`os.environ.pop(\"ANTHROPIC_BASE_URL\", None)\`) or pass \`base_url\` explicitly to the
-  Anthropic client.
 "
 
     # Detect Python project
     if [[ -f "${PROJECT}/pyproject.toml" || -f "${PROJECT}/requirements.txt" || \
           -f "${PROJECT}/setup.py" || -f "${PROJECT}/Pipfile" ]]; then
         content+="
-## Python Environment
+## Python Projects
 
-System Python is managed by \`uv\`. Do NOT use \`pip\` directly — use \`uv pip\` instead.
+Follow these steps **before** running any Python code:
 
-If \`.venv/\` exists, it was created on macOS and contains Mach-O binaries — do NOT use it.
-Create a Linux-native virtual environment:
+1. **Create a Linux virtualenv** (any existing \`.venv/\` contains macOS binaries — do not use it):
+   \`\`\`bash
+   uv venv .venv-container && source .venv-container/bin/activate
+   \`\`\`
+   Use \`.venv-container\` to avoid conflicts with the host \`.venv/\`.
 
-\`\`\`bash
-uv venv .venv-container && source .venv-container/bin/activate
-uv pip install -r requirements.txt  # or: uv pip install -e .
-\`\`\`
+2. **Install dependencies** (use \`uv pip\`, never bare \`pip\`):
+   \`\`\`bash
+   uv pip install -r requirements.txt   # or: uv pip install -e .
+   \`\`\`
 
-Use \`.venv-container\` (not \`.venv\`) to avoid conflicts with the host environment.
+3. **Fix \`.env\` loading** — \`ANTHROPIC_API_KEY\` is set to an empty string in this
+   container (for Claude Code OAuth). \`load_dotenv()\` will NOT override it.
+   Change every \`load_dotenv()\` call to:
+   \`\`\`python
+   load_dotenv(override=True)
+   \`\`\`
+
+4. **Set \`ANTHROPIC_BASE_URL\`** — \`ANTHROPIC_BASE_URL\` is set to a proxy in this
+   container. Add this line to \`.env\`:
+   \`\`\`
+   ANTHROPIC_BASE_URL=https://api.anthropic.com
+   \`\`\`
+   \`load_dotenv(override=True)\` from step 3 will restore it.
 "
     fi
 
