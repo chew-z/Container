@@ -130,7 +130,7 @@ flowchart TD
     Full --> F3["Enables: hooks, MCP servers,<br/>attachments, CLAUDE.md files"]
 ```
 
-**Why default ON:** The Go image has no Python/uv, which hooks require. Rather than adding Python to every image, simple mode avoids startup errors.
+**Why default ON:** I am fan of using Claude Simple Mode - it is smart enough for most tasks without overkill like agents, hooks etc.
 
 **What still works in simple mode:**
 
@@ -143,8 +143,8 @@ flowchart TD
 **To disable simple mode:**
 
 1. Set `claude_simple_mode = false` in `container-run.toml`
-2. Ensure the image has Python 3.12+ and uv (the Python image already does)
-3. Configure MCP servers in `settings.json` if needed
+2. Configure MCP servers in `settings.json` as needed (use http tarnsport instead of stdio)
+3. For my personal hooks add Python 3.12 (which they run on)
 
 ---
 
@@ -174,7 +174,7 @@ flowchart TD
 | `"plan"`  | `--permission-mode plan --allow-dangerously-skip-permissions` | Start in plan mode; Claude can propose escalation |
 | `"false"` | _(none)_                                                      | Normal interactive prompts                        |
 
-**Why "yolo" is safe:** The container is ephemeral and isolated. Changes stay inside unless you explicitly push via git. There is no risk to the host filesystem in copy mode (default).
+**Why "YOLO" here is safe:** The container is ephemeral and isolated. Changes stay inside unless you explicitly push via git. There is no risk to the host filesystem.
 
 ---
 
@@ -275,17 +275,17 @@ Available conditions: `HAS_ACP`, `HAS_GOLANGCI_CONFIG`.
 
 ### Making Claude read CONTAINER.md
 
-To ensure Claude reads the container context, add this to your project's `CLAUDE.md`:
+To ensure Claude reads the container context, you can add this to your project's `CLAUDE.md`:
 
 ```markdown
 # Container Environment
 
-./CONTAINER.md
+@./CONTAINER.md
 ```
 
 ## System Prompt Injection
 
-`launch.sh` automatically appends a system prompt to every Claude session:
+`launch.sh` automatically appends a system prompt to each Claude session:
 
 ```
 You MUST read CONTAINER.md in the workspace root before doing anything else.

@@ -4,6 +4,7 @@
 
 - Verify host login: `claude login`
 - Check Keychain: `security find-generic-password -s "Claude Code-credentials" -w | jq .`
+- Log in with you Plan account on macOS
 
 ## "Image not found"
 
@@ -11,6 +12,7 @@
 
 ## Build OOM ("cannot allocate memory")
 
+- Happens when building Claude Code (that's why we prefer downloading binary)
 - Increase builder memory: `BUILD_MEMORY=12g ./launch.sh --rebuild`
 
 ## 401 "invalid x-api-key" errors
@@ -30,5 +32,4 @@
 
 ## "Query closed before response received" in Zed
 
-- Ensure `CLAUDE_CODE_EXECUTABLE` is **not** set in Zed's env block
 - Check ACP logs: `tail -f /tmp/zed-claude-acp.log`
