@@ -1,0 +1,53 @@
+# Container Environment (auto-generated)
+
+You are running inside a **Linux arm64** container (Debian bookworm), NOT macOS.
+This is an isolated copy of the project — changes here do NOT affect the host.
+
+## Runtime
+
+- Language image: `golang`
+- Go version: `{{GO_VERSION}}`
+- golangci-lint version: `{{GOLANGCI_LINT_VERSION}}`
+- Claude Code version: `{{CLAUDE_VERSION}}`
+
+<if HAS_ACP>
+- claude-agent-acp: installed
+</if>
+<if !HAS_ACP>
+- claude-agent-acp: not installed in this image
+</if>
+
+## Go
+
+`go build` produces Linux arm64 binaries. In this isolated workspace copy that is
+safe by default, but keep output paths explicit when needed:
+
+```bash
+go build -o ./bin/linux/ ./...
+```
+
+### Installed Go tooling
+
+- `gopls`
+- `goimports`
+- `golangci-lint`
+- `gotestsum`
+- `govulncheck`
+
+### Recommended inner loop
+
+```bash
+goimports -w .
+golangci-lint run ./...
+gotestsum -- -race ./...
+govulncheck ./...
+```
+
+<if HAS_GOLANGCI_CONFIG>
+Host `~/.golangci.yml` / `~/.golangci.yaml` was copied to `/home/sandbox/`.
+</if>
+
+## Build Artifacts
+
+All compiled binaries and native extensions are Linux arm64.
+This container is ephemeral — it is destroyed on exit.

@@ -1,0 +1,55 @@
+# Container Environment (auto-generated)
+
+You are running inside a **Linux arm64** container (Debian bookworm), NOT macOS.
+This is an isolated copy of the project — changes here do NOT affect the host.
+
+## Runtime
+
+- Language image: `python`
+- Python version: `{{PYTHON_VERSION}}`
+- Claude Code version: `{{CLAUDE_VERSION}}`
+
+<if HAS_ACP>
+- claude-agent-acp: installed
+</if>
+<if !HAS_ACP>
+- claude-agent-acp: not installed in this image
+</if>
+
+## Available Tools
+
+- git, gh (GitHub CLI), jq, ripgrep, fd, fzf, uv
+- openssh-client (SSH keys are pre-configured for github.com)
+
+## Python Projects
+
+Follow these steps **before** running any Python code:
+
+1. **Create a Linux virtualenv** (the host `.venv/` contains macOS binaries — do not use it):
+   ```bash
+   uv venv .venv && source .venv/bin/activate
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   uv pip install -r requirements.txt   # or: uv pip install -e .
+   ```
+
+3. **Fix `.env` loading** — `ANTHROPIC_API_KEY` is set to an empty string in this
+   container (for Claude Code OAuth). `load_dotenv()` will NOT override it.
+   Change every `load_dotenv()` call to:
+   ```python
+   load_dotenv(override=True)
+   ```
+
+4. **Set `ANTHROPIC_BASE_URL`** — if `ANTHROPIC_BASE_URL` is set to a proxy in the
+   container environment, add this line to `.env`:
+   ```
+   ANTHROPIC_BASE_URL=https://api.anthropic.com
+   ```
+   `load_dotenv(override=True)` from step 3 will restore it.
+
+## Build Artifacts
+
+All compiled binaries and native extensions are Linux arm64.
+This container is ephemeral — it is destroyed on exit.

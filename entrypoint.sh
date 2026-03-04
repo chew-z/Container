@@ -87,96 +87,119 @@ if [[ "${SANDBOX_COPY_MODE:-0}" == "1" ]]; then
 fi
 
 # ── 4. Generate CONTAINER.md ──────────────────────────────────────────────────
-# Dynamic context file — content adapts to the language target installed.
-echo "[entrypoint] Generating CONTAINER.md..." >&2
-{
-cat << 'HEADER'
+# Dynamic context file rendered from templates.
+echo "[entrypoint] Generating CONTAINER.md from template..." >&2
+
+CONTAINER_TEMPLATE_DIR="${CONTAINER_TEMPLATE_DIR:-/opt/container-templates}"
+CONTAINER_TEMPLATE_PYTHON="${CONTAINER_TEMPLATE_PYTHON:-$CONTAINER_TEMPLATE_DIR/CONTAINER.python.md.tmpl}"
+CONTAINER_TEMPLATE_GOLANG="${CONTAINER_TEMPLATE_GOLANG:-$CONTAINER_TEMPLATE_DIR/CONTAINER.golang.md.tmpl}"
+
+get_python_version() {
+    if command -v python3 &>/dev/null; then
+        python3 --version 2>/dev/null | awk '{print $2}'
+    fi
+}
+
+get_go_version() {
+    if command -v go &>/dev/null; then
+        go version | awk '{print $3}' | sed 's/^go//'
+    fi
+}
+
+get_golangci_lint_version() {
+    if command -v golangci-lint &>/dev/null; then
+        golangci-lint version 2>/dev/null | sed -n 's/.*version \([^ ,]*\).*/\1/p' | head -n1
+    fi
+}
+
+get_claude_version() {
+    if [[ -f /home/sandbox/.local/share/claude-version ]]; then
+        cat /home/sandbox/.local/share/claude-version
+    elif command -v claude &>/dev/null; then
+        claude --version 2>/dev/null | awk '{print $NF}'
+    fi
+}
+
+truthy() {
+    case "${1,,}" in
+        1|true|yes|on) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+evaluate_condition() {
+    local cond="$1"
+    local negate=0
+    if [[ "$cond" == !* ]]; then
+        negate=1
+        cond="${cond#!}"
+    fi
+
+    local val="${!cond:-false}"
+    if truthy "$val"; then
+        [[ "$negate" -eq 1 ]] && return 1 || return 0
+    fi
+    [[ "$negate" -eq 1 ]] && return 0 || return 1
+}
+
+render_template() {
+    local template_path="$1"
+    local output_path="$2"
+
+    local re_if='^[[:space:]]*<if[[:space:]]+([^[:space:]>]+)[[:space:]]*>[[:space:]]*$'
+    local re_endif='^[[:space:]]*</if>[[:space:]]*$'
+    local line emit=1
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" =~ $re_if ]]; then
+            local cond="${BASH_REMATCH[1]}"
+            if evaluate_condition "$cond"; then
+                emit=1
+            else
+                emit=0
+            fi
+            continue
+        fi
+        if [[ "$line" =~ $re_endif ]]; then
+            emit=1
+            continue
+        fi
+
+        if [[ "$emit" -eq 1 ]]; then
+            line="${line//\{\{PYTHON_VERSION\}\}/${PYTHON_VERSION:-unknown}}"
+            line="${line//\{\{GO_VERSION\}\}/${GO_VERSION:-unknown}}"
+            line="${line//\{\{GOLANGCI_LINT_VERSION\}\}/${GOLANGCI_LINT_VERSION:-unknown}}"
+            line="${line//\{\{CLAUDE_VERSION\}\}/${CLAUDE_VERSION:-unknown}}"
+            printf '%s\n' "$line"
+        fi
+    done < "$template_path" > "$output_path"
+}
+
+HAS_ACP=false
+HAS_GOLANGCI_CONFIG=false
+PYTHON_VERSION="$(get_python_version)"
+GO_VERSION="$(get_go_version)"
+GOLANGCI_LINT_VERSION="$(get_golangci_lint_version)"
+CLAUDE_VERSION="$(get_claude_version)"
+
+if command -v claude-agent-acp &>/dev/null; then
+    HAS_ACP=true
+fi
+
+if [[ -f /home/sandbox/.golangci.yml || -f /home/sandbox/.golangci.yaml ]]; then
+    HAS_GOLANGCI_CONFIG=true
+fi
+
+if command -v go &>/dev/null && [[ -f "$CONTAINER_TEMPLATE_GOLANG" ]]; then
+    render_template "$CONTAINER_TEMPLATE_GOLANG" /workspace/CONTAINER.md
+elif [[ -f "$CONTAINER_TEMPLATE_PYTHON" ]]; then
+    render_template "$CONTAINER_TEMPLATE_PYTHON" /workspace/CONTAINER.md
+else
+    cat > /workspace/CONTAINER.md << 'FALLBACK'
 # Container Environment (auto-generated)
 
-You are running inside a **Linux arm64** container (Debian bookworm), NOT macOS.
-This is an isolated copy of the project — changes here do NOT affect the host.
-
-## Available Tools
-
-- git, gh (GitHub CLI), jq, ripgrep, fd, fzf, uv
-- openssh-client (SSH keys are pre-configured for github.com)
-HEADER
-
-if command -v python3 &>/dev/null; then
-cat << 'PYTHON'
-
-## Python Projects
-
-Follow these steps **before** running any Python code:
-
-1. **Create a Linux virtualenv** (the host `.venv/` contains macOS binaries — do not use it):
-   ```bash
-   uv venv .venv && source .venv/bin/activate
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   uv pip install -r requirements.txt   # or: uv pip install -e .
-   ```
-
-3. **Fix `.env` loading** — `ANTHROPIC_API_KEY` is set to an empty string in this
-   container (for Claude Code OAuth). `load_dotenv()` will NOT override it.
-   Change every `load_dotenv()` call to:
-   ```python
-   load_dotenv(override=True)
-   ```
-
-4. **Set `ANTHROPIC_BASE_URL`** — if `ANTHROPIC_BASE_URL` is set to a proxy in the
-   container environment, add this line to `.env`:
-   ```
-   ANTHROPIC_BASE_URL=https://api.anthropic.com
-   ```
-   `load_dotenv(override=True)` from step 3 will restore it.
-PYTHON
+Template files not found. Ensure templates are available in /opt/container-templates.
+FALLBACK
 fi
-
-if command -v go &>/dev/null; then
-cat << 'GOLANG'
-
-## Go
-
-`go build` produces Linux arm64 binaries. In this isolated workspace copy that is
-safe by default, but keep output paths explicit when needed:
-
-```bash
-go build -o ./bin/linux/ ./...
-```
-
-### Installed Go tooling
-
-- `gopls`
-- `goimports`
-- `golangci-lint`
-- `gotestsum`
-- `govulncheck`
-
-### Recommended inner loop
-
-```bash
-goimports -w .
-golangci-lint run ./...
-gotestsum -- -race ./...
-govulncheck ./...
-```
-
-If present, host `~/.golangci.yml` or `~/.golangci.yaml` is copied into
-`/home/sandbox/`.
-GOLANG
-fi
-
-cat << 'FOOTER'
-
-## Build Artifacts
-
-All compiled binaries and native extensions are Linux arm64.
-This container is ephemeral — it is destroyed on exit.
-FOOTER
-} > /workspace/CONTAINER.md
 
 # ── 5. Change to workspace ──────────────────────────────────────────────────
 echo "[entrypoint] Starting Claude Code in /workspace..." >&2

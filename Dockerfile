@@ -12,6 +12,13 @@ FROM --platform=linux/arm64 debian:bookworm-slim AS base
 ARG DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-c"]
 
+ARG FD_VERSION=10.3.0
+ARG GH_VERSION=2.87.3
+ARG CLAUDE_CODE_GCS=https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases
+ARG CLAUDE_CODE_VERSION=latest
+ARG INSTALL_CLAUDE_AGENT_ACP=0
+ARG CLAUDE_AGENT_ACP_VERSION=latest
+
 # ── System packages ──────────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -26,7 +33,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 # ── fd (upstream binary — Debian's fd-find installs as fdfind) ───────────
-ARG FD_VERSION=10.3.0
 RUN curl -fsSL "https://github.com/sharkdp/fd/releases/download/v${FD_VERSION}/fd-v${FD_VERSION}-aarch64-unknown-linux-gnu.tar.gz" \
     | tar -xz -C /tmp && \
     mv /tmp/fd-v${FD_VERSION}-aarch64-unknown-linux-gnu/fd /usr/local/bin/fd && \
@@ -39,32 +45,42 @@ RUN useradd -m -s /bin/bash sandbox
 RUN git config --system safe.directory '*'
 
 # ── GitHub CLI ─────────────────────────────────────────────────────────────
-ARG GH_VERSION=2.87.3
 RUN curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_arm64.tar.gz" \
     | tar -xz -C /tmp && \
     mv /tmp/gh_${GH_VERSION}_linux_arm64/bin/gh /usr/local/bin/gh && \
     rm -rf /tmp/gh_${GH_VERSION}_linux_arm64
 
-# ── uv (as sandbox user) ────────────────────────────────────────────────────
-USER sandbox
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-
 # ── Claude Code (direct binary — no Bun/npm, no OOM) ──────────────────────
-ARG CLAUDE_CODE_GCS=https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases
+USER sandbox
 RUN mkdir -p /home/sandbox/.local/bin && \
-    CLAUDE_VERSION=$(curl -fsSL "${CLAUDE_CODE_GCS}/latest") && \
+        if [[ "${CLAUDE_CODE_VERSION}" == "latest" ]]; then \
+            CLAUDE_VERSION=$(curl -fsSL "${CLAUDE_CODE_GCS}/latest"); \
+        else \
+            CLAUDE_VERSION="${CLAUDE_CODE_VERSION}"; \
+        fi && \
     echo "Downloading Claude Code v${CLAUDE_VERSION} for linux-arm64..." && \
     curl -fsSL "${CLAUDE_CODE_GCS}/${CLAUDE_VERSION}/linux-arm64/claude" \
         -o /home/sandbox/.local/bin/claude && \
-    chmod +x /home/sandbox/.local/bin/claude
+        chmod +x /home/sandbox/.local/bin/claude && \
+        mkdir -p /home/sandbox/.local/share && \
+        echo "${CLAUDE_VERSION}" > /home/sandbox/.local/share/claude-version
 
 # ── claude-agent-acp binary (resolves latest from GitHub at build time) ────
-RUN CLAUDE_ACP_VERSION=$(curl -fsSL "https://api.github.com/repos/zed-industries/claude-agent-acp/releases/latest" | jq -r '.tag_name') && \
-    echo "Downloading claude-agent-acp ${CLAUDE_ACP_VERSION} for linux-arm64..." && \
-    curl -fsSL "https://github.com/zed-industries/claude-agent-acp/releases/download/${CLAUDE_ACP_VERSION}/claude-agent-acp-linux-arm64.tar.gz" \
-    | tar -xz -C /tmp && \
-    mv /tmp/claude-agent-acp /home/sandbox/.local/bin/claude-agent-acp && \
-    chmod +x /home/sandbox/.local/bin/claude-agent-acp
+RUN if [[ "${INSTALL_CLAUDE_AGENT_ACP}" == "1" ]]; then \
+            if [[ "${CLAUDE_AGENT_ACP_VERSION}" == "latest" ]]; then \
+                CLAUDE_ACP_VERSION=$(curl -fsSL "https://api.github.com/repos/zed-industries/claude-agent-acp/releases/latest" | jq -r '.tag_name'); \
+            else \
+                CLAUDE_ACP_VERSION="${CLAUDE_AGENT_ACP_VERSION}"; \
+            fi; \
+            echo "Downloading claude-agent-acp ${CLAUDE_ACP_VERSION} for linux-arm64..."; \
+            curl -fsSL "https://github.com/zed-industries/claude-agent-acp/releases/download/${CLAUDE_ACP_VERSION}/claude-agent-acp-linux-arm64.tar.gz" \
+            | tar -xz -C /tmp; \
+            mv /tmp/claude-agent-acp /home/sandbox/.local/bin/claude-agent-acp; \
+            chmod +x /home/sandbox/.local/bin/claude-agent-acp; \
+            echo "${CLAUDE_ACP_VERSION}" > /home/sandbox/.local/share/claude-agent-acp-version; \
+        else \
+            echo "Skipping claude-agent-acp installation (INSTALL_CLAUDE_AGENT_ACP=${INSTALL_CLAUDE_AGENT_ACP})."; \
+        fi
 
 # ── PATH + working directory ────────────────────────────────────────────────
 ENV PATH=/home/sandbox/.local/bin:/home/sandbox/.cargo/bin:$PATH
@@ -73,6 +89,7 @@ WORKDIR /home/sandbox
 # ── Entrypoint ──────────────────────────────────────────────────────────────
 USER root
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY templates/ /opt/container-templates/
 RUN chmod +x /usr/local/bin/entrypoint.sh
 USER sandbox
 
@@ -83,6 +100,9 @@ ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 # PYTHON — Python 3.14 via uv
 # ═════════════════════════════════════════════════════════════════════════════
 FROM base AS python
+
+# ── uv ────────────────────────────────────────────────────────────────────────
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ARG PYTHON_VERSION=3.14
 RUN uv python install ${PYTHON_VERSION} && \
@@ -129,6 +149,6 @@ RUN go install golang.org/x/tools/gopls@latest && \
 RUN go version && \
     golangci-lint version && \
     gopls version >/dev/null && \
-    goimports -help >/dev/null && \
+    command -v goimports && \
     gotestsum --version >/dev/null && \
     govulncheck -version >/dev/null

@@ -1,0 +1,16 @@
+# Container build configuration
+# Used by launch.sh when --rebuild is enabled.
+
+[versions]
+# Use "latest" to resolve dynamically at build time.
+claude_code = "latest"
+claude_agent_acp = "latest"
+gh = "2.87.3"
+fd = "10.3.0"
+python = "3.14"
+go = "1.26.0"
+golangci_lint = "v2.4.0"
+
+[features]
+# Default OFF per project decision: general sandbox image does not need ACP.
+install_claude_agent_acp = false

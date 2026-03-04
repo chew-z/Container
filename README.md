@@ -52,15 +52,18 @@ flowchart LR
 
 ## Files
 
-| File                | Purpose                                                               |
-| ------------------- | --------------------------------------------------------------------- |
-| `Dockerfile`        | Multi-target image: base + Python or Go                               |
-| `entrypoint.sh`     | Container startup: copies config, credentials, SSH keys, workspace    |
-| `launch.sh`         | Interactive mode: ephemeral container with full isolation             |
-| `zed-claude-acp.sh` | Zed ACP mode: persistent container with stdio bridge                  |
-| `cleanup.sh`        | Manage containers and images (list/stop/remove/prune)                 |
-| `CONTAINER.md`      | Auto-generated in project dir; tells Claude it's in a Linux container |
-| `.dockerignore`     | Limits build context to Dockerfile + entrypoint.sh                    |
+| File                                 | Purpose                                                               |
+| ------------------------------------ | --------------------------------------------------------------------- |
+| `Dockerfile`                         | Multi-target image: base + Python or Go                               |
+| `entrypoint.sh`                      | Container startup: copies config, credentials, SSH keys, workspace    |
+| `launch.sh`                          | Interactive mode: ephemeral container with full isolation             |
+| `zed-claude-acp.sh`                  | Zed ACP mode: persistent container with stdio bridge                  |
+| `cleanup.sh`                         | Manage containers and images (list/stop/remove/prune)                 |
+| `container-build.toml`               | Build-time versions/features config for image rebuilds                |
+| `templates/CONTAINER.python.md.tmpl` | Interactive `CONTAINER.md` template for Python image                  |
+| `templates/CONTAINER.golang.md.tmpl` | Interactive `CONTAINER.md` template for Go image                      |
+| `CONTAINER.md`                       | Auto-generated in project dir; tells Claude it's in a Linux container |
+| `.dockerignore`                      | Limits build context to Dockerfile + entrypoint.sh                    |
 
 ## How It Works
 
@@ -102,20 +105,32 @@ flowchart TB
     WS --> Exec["exec claude"]
 ```
 
-| Flag                 | Description                                     |
-| -------------------- | ----------------------------------------------- |
-| `--rebuild`          | Build/rebuild the container image               |
-| `-C, --project PATH` | Project directory (default: `$PWD`)             |
-| `--lang LANG`        | Language target: `python` (default) or `golang` |
-| `--rw`               | Mount workspace read-write (no isolation)       |
-| `--update-claude`    | Allow Claude to auto-update in container        |
-| `-- ARGS...`         | Pass arguments to claude                        |
+| Flag                 | Description                                           |
+| -------------------- | ----------------------------------------------------- |
+| `--rebuild`          | Build/rebuild the container image                     |
+| `-C, --project PATH` | Project directory (default: `$PWD`)                   |
+| `--lang LANG`        | Language target: `python` (default) or `golang`       |
+| `--rw`               | Mount workspace read-write (no isolation)             |
+| `--update-claude`    | Allow Claude to auto-update in container              |
+| `--config PATH`      | Build config path (default: `./container-build.toml`) |
+| `-- ARGS...`         | Pass arguments to claude                              |
 
-| Variable         | Default  | Description              |
-| ---------------- | -------- | ------------------------ |
-| `CONTAINER_LANG` | `python` | Language target          |
-| `BUILD_CPUS`     | 2        | CPUs for image builder   |
-| `BUILD_MEMORY`   | 4g       | Memory for image builder |
+| Variable                 | Default                  | Description                |
+| ------------------------ | ------------------------ | -------------------------- |
+| `CONTAINER_LANG`         | `python`                 | Language target            |
+| `BUILD_CPUS`             | 2                        | CPUs for image builder     |
+| `BUILD_MEMORY`           | 4g                       | Memory for image builder   |
+| `CONTAINER_BUILD_CONFIG` | `./container-build.toml` | Build config path override |
+
+### Build config (`container-build.toml`)
+
+`launch.sh --rebuild` reads build versions/features from TOML. Current keys:
+
+- `[versions]`: `claude_code`, `claude_agent_acp`, `gh`, `fd`, `python`, `go`, `golangci_lint`
+- `[features]`: `install_claude_agent_acp` (`true`/`false`)
+
+Default policy: `install_claude_agent_acp = false` (lean general sandbox image).
+If you use Zed ACP, rebuild with it enabled in config.
 
 ### Mode 2: Zed ACP (`zed-claude-acp.sh`)
 
@@ -280,7 +295,9 @@ The container runs Linux arm64 but the host is macOS. This causes cross-platform
 - **Go binaries** built inside the container are Linux ELF — won't run on macOS
 - **C extensions** (`.so` files) are platform-specific
 
-Both scripts auto-generate a `CONTAINER.md` file in the project directory at startup. To make Claude aware of the container environment, add this to your project's `CLAUDE.md`:
+Both scripts auto-generate a `CONTAINER.md` file in the project directory at startup. For interactive mode (`launch.sh`), `entrypoint.sh` now renders `CONTAINER.md` from editable templates in `templates/` using placeholders like `{{GO_VERSION}}` / `{{PYTHON_VERSION}}` and pseudo-XML sections like `<if HAS_ACP>...</if>`.
+
+To make Claude aware of the container environment, add this to your project's `CLAUDE.md`:
 
 ```markdown
 # Container Environment
@@ -294,7 +311,7 @@ The generated file tells Claude:
 - How to create a Linux-native Python venv (instead of using the macOS `.venv/`)
 - How to handle Go build artifacts and run Go quality tooling (`goimports`, `golangci-lint`, `gotestsum`, `govulncheck`)
 
-`launch.sh` generates it inside `/workspace` (isolated copy). `zed-claude-acp.sh` generates it in the host project directory (bind mount) — add `CONTAINER.md` to `.gitignore`.
+`launch.sh` generates it inside `/workspace` (isolated copy, template-based). `zed-claude-acp.sh` generates it in the host project directory (bind mount, inline generator for now) — add `CONTAINER.md` to `.gitignore`.
 
 ### ACP Runtime
 
