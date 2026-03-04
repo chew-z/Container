@@ -5,27 +5,29 @@
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "8px"}}}%%
 flowchart LR
-    subgraph Host["macOS Host"]
+    subgraph Host["macOS"]
         Terminal["Terminal"]
         Keychain["macOS Keychain"]
         Project["Project Files"]
     end
 
-    subgraph Container["Linux Container (arm64)"]
+    subgraph Container["Linux (arm64)"]
         Claude["Claude Code"]
         Tools["git, gh, ripgrep, fd, fzf"]
     end
 
     Terminal -->|"launch.sh"| Claude
-    Keychain -.->|"OAuth + GH token"| Container
-    Project -->|"copy or\nbind mount"| Container
+    Keychain -.->|"OAuth + gh token"| Container
+    Project -->|"copy or bind mount"| Container
 ```
 
-Project defaults to an ephemeral, isolated container - it is a strong fit for Claude Code YOLO permission modes like `--dangerously-skip-permissions` or `--allow-dangerously-skip-permissions`: risky actions are sandboxed, and local changes disappear unless you intentionally persist them (for example via git PR).
+Claude Code runs in an ephemeral, isolated container - it is a strong fit for Claude Code YOLO permission modes like `--dangerously-skip-permissions` or `--allow-dangerously-skip-permissions`: risky actions are sandboxed, and local changes disappear unless user intentionally persist them (for example via git PR).
 
 ## Why Apple Container
 
-We chose Apple Container because it provides Apple Silicon-native Linux containers with lightweight-VM isolation and strong security/privacy-performance tradeoffs ([WWDC25 video](https://developer.apple.com/videos/play/wwdc2025/346/), [container](https://github.com/apple/container), [containerization](https://github.com/apple/containerization), [community deep dive](https://schoenwald.aero/posts/2025-09-14_apple-opensource-containers/)). It is new but superior to Apple Seatbelt that Claude Code can use for sandbox by default.
+Apple Container provides Apple Silicon-native Linux containers with lightweight-VM isolation and strong security/privacy-performance tradeoffs ([WWDC25 video](https://developer.apple.com/videos/play/wwdc2025/346/), [container](https://github.com/apple/container), [containerization](https://github.com/apple/containerization), [community deep dive](https://schoenwald.aero/posts/2025-09-14_apple-opensource-containers/)).
+
+It is new tech but superior to Apple Seatbelt that Claude Code use for sandbox by default.
 
 ## Prerequisites
 
