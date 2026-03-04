@@ -118,7 +118,7 @@ Sets `CLAUDE_CODE_SIMPLE=1` at container runtime. This is a Claude Code built-in
 flowchart TD
     Start["Container starts"] --> Check{"claude_simple_mode?"}
 
-    Check -->|true (default)| Simple["CLAUDE_CODE_SIMPLE=1"]
+    Check -->|true-default| Simple["CLAUDE_CODE_SIMPLE=1"]
     Check -->|false| Full["Full features enabled"]
 
     Simple --> S1["Disables: hooks, MCP servers,<br/>attachments, CLAUDE.md processing"]
@@ -159,7 +159,7 @@ Controls how Claude handles permission prompts inside the container.
 flowchart TD
     Start["launch.sh reads claude_skip_permissions"] --> Mode{"Value?"}
 
-    Mode -->|yolo (default)| Yolo["--dangerously-skip-permissions"]
+    Mode -->|yolo-default| Yolo["--dangerously-skip-permissions"]
     Mode -->|plan| Plan["--permission-mode plan<br/>--allow-dangerously-skip-permissions"]
     Mode -->|false| Off["No special flags"]
 
