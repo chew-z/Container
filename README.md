@@ -1,9 +1,9 @@
-# Claude Code Container
+# Claude Code in Apple Container
 
-Run Claude Code inside a sandboxed Linux container on macOS — full isolation, ephemeral by default, credentials bridged automatically from Keychain.
+**Run Claude Code inside a sandboxed Linux container on macOS** — full isolation, ephemeral by default, credentials bridged automatically (so uses your Claude Code plan).
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "12px"}}}%%
+%%{init: {"themeVariables": {"fontSize": "8px"}}}%%
 flowchart LR
     subgraph Host["macOS Host"]
         Terminal["Terminal"]
@@ -18,8 +18,14 @@ flowchart LR
 
     Terminal -->|"launch.sh"| Claude
     Keychain -.->|"OAuth + GH token"| Container
-    Project -->|"copy or bind mount"| Container
+    Project -->|"copy or\nbind mount"| Container
 ```
+
+Project defaults to an ephemeral, isolated container - it is a strong fit for Claude Code YOLO permission modes like `--dangerously-skip-permissions` or `--allow-dangerously-skip-permissions`: risky actions are sandboxed, and local changes disappear unless you intentionally persist them (for example via git PR).
+
+## Why Apple Container
+
+We chose Apple Container because it provides Apple Silicon-native Linux containers with lightweight-VM isolation and strong security/privacy-performance tradeoffs ([WWDC25 video](https://developer.apple.com/videos/play/wwdc2025/346/), [container](https://github.com/apple/container), [containerization](https://github.com/apple/containerization), [community deep dive](https://schoenwald.aero/posts/2025-09-14_apple-opensource-containers/)). It is new but superior to Apple Seatbelt that Claude Code can use for sandbox by default.
 
 ## Prerequisites
 
@@ -32,9 +38,9 @@ flowchart LR
 
 ```bash
 ./launch.sh --rebuild          # Build image (first time)
-./launch.sh                    # Run Claude Code interactively
-./launch.sh -C /path/to/project  # Run on a specific project
-./launch.sh --rebuild --lang golang  # Build Go image
+./launch.sh                    # Run Claude Code in sandboxed container
+./launch.sh -C /path/to/project  # Run Claude Code with specific project
+./launch.sh --rebuild --lang golang  # Build image for Golang project (default Python)
 ```
 
 ## Documentation
@@ -65,9 +71,9 @@ flowchart LR
 Multi-target Dockerfile with a shared base and language-specific stages:
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "12px"}}}%%
+%%{init: {"themeVariables": {"fontSize": "8px"}}}%%
 flowchart TB
-    Base["base stage<br/><i>Debian bookworm-slim, arm64</i>"] --> Python["python stage"]
+    Base["base stage<br/><i>Debian bookworm-slim,<br/>arm64</i>"] --> Python["python stage"]
     Base --> Golang["golang stage"]
 
     subgraph python_img["claudecode-python"]

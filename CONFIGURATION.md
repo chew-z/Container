@@ -114,7 +114,7 @@ These flags are read at every `launch.sh` invocation — no rebuild required.
 Sets `CLAUDE_CODE_SIMPLE=1` at container runtime. This is a Claude Code built-in flag that creates a leaner session.
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "12px"}}}%%
+%%{init: {"themeVariables": {"fontSize": "8px"}}}%%
 flowchart TD
     Start["Container starts"] --> Check{"claude_simple_mode?"}
 
@@ -155,7 +155,7 @@ flowchart TD
 Controls how Claude handles permission prompts inside the container.
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "12px"}}}%%
+%%{init: {"themeVariables": {"fontSize": "8px"}}}%%
 flowchart TD
     Start["launch.sh reads claude_skip_permissions"] --> Mode{"Value?"}
 
