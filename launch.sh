@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEMPLATE_DIR="$SCRIPT_DIR"
 PROJECT="$PWD"
 REBUILD=0
+FRESH_BUILD=0
 COPY_MODE=1
 CLAUDE_AUTO_UPDATE=0
 LANG_TARGET="${CONTAINER_LANG:-python}"
@@ -29,7 +30,8 @@ Options:
   -C, --project PATH       Project directory to mount (default: \$PWD)
   --template-dir DIR       Directory containing Dockerfile and entrypoint.sh
                            (default: directory containing this script)
-  --rebuild                Rebuild the container image before running
+  --rebuild                Smart rebuild — resolves "latest" versions, uses cache
+  --full-rebuild           Complete no-cache rebuild from scratch
   --update-claude          Allow Claude to auto-update inside the container
   --lang LANG              Language target: python (default) or golang
   --memory SIZE            Container memory (e.g., 4g, 8g). Overrides config/defaults
@@ -161,6 +163,11 @@ while [[ $# -gt 0 ]]; do
             REBUILD=1
             shift
             ;;
+        --full-rebuild)
+            FRESH_BUILD=1
+            REBUILD=1
+            shift
+            ;;
         --update-claude)
             CLAUDE_AUTO_UPDATE=1
             shift
@@ -278,10 +285,28 @@ build_image() {
     build_cpus="${build_cpus:-2}"
     build_memory="${build_memory:-4g}"
 
+    # ── Resolve "latest" on host so BuildKit sees a new cache key ──────────
+    local CLAUDE_CODE_GCS="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases"
+
+    if [[ "$claude_code_version" == "latest" ]]; then
+        claude_code_version="$(curl -fsSL --retry 3 --retry-delay 2 "$CLAUDE_CODE_GCS/latest")"
+        echo "==> Resolved Claude Code latest -> v${claude_code_version}"
+    fi
+
+    if [[ "$install_acp" == "1" && "$claude_agent_acp_version" == "latest" ]]; then
+        claude_agent_acp_version="$(curl -fsSL --retry 3 --retry-delay 2 \
+            "https://api.github.com/repos/zed-industries/claude-agent-acp/releases/latest" | jq -r '.tag_name')"
+        echo "==> Resolved claude-agent-acp latest -> ${claude_agent_acp_version}"
+    fi
+
+    # ── Build ────────────────────────────────────────────────────────────────
+    local no_cache_flag=""
+    [[ "$FRESH_BUILD" == "1" ]] && no_cache_flag="--no-cache"
+
     echo "==> Starting builder..."
     container builder start --cpus "$build_cpus" --memory "$build_memory"
     echo "==> Building image: $IMAGE (target: $LANG_TARGET, config: $cfg)"
-    container build -t "$IMAGE" \
+    container build $no_cache_flag -t "$IMAGE" \
         --target "$LANG_TARGET" \
         --arch arm64 \
         --build-arg "FD_VERSION=$fd_version" \

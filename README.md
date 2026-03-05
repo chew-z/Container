@@ -47,11 +47,12 @@ It is new tech but superior to Apple Seatbelt that Claude Code use for sandbox b
 
 ## Documentation
 
-| Document                                 | What's inside                                                         |
-| ---------------------------------------- | --------------------------------------------------------------------- |
-| [CONFIGURATION.md](CONFIGURATION.md)     | Build config, feature flags, permission modes, simple mode, templates |
-| [RUNNING.md](RUNNING.md)                 | Building images, running containers, workspace isolation, cleanup     |
-| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common errors and quick fixes                                         |
+| Document                                                            | What's inside                                                         |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| [CONFIGURATION.md](CONFIGURATION.md)                                | Build config, feature flags, permission modes, simple mode, templates |
+| [RUNNING.md](RUNNING.md)                                            | Building images, running containers, workspace isolation, cleanup     |
+| [Container Lifecycle](docs/container-lifecycle.md)                   | How containers, images, and builder cache interact; rebuild strategies |
+| [TROUBLESHOOTING.md](TROUBLESHOOTING.md)                            | Common errors and quick fixes                                         |
 
 ## Files
 

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# cleanup.sh — manage all Claude Code containers and images
+# cleanup.sh — manage all Claude Code containers, images, and builder cache
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Container prefixes managed by this toolkit
 PREFIXES=("claude-" "zed-")
@@ -11,17 +13,64 @@ usage() {
     cat <<EOF
 Usage: $(basename "$0") [COMMAND]
 
-Manage Claude Code containers (claude-*, zed-*) and images (claudecode-*).
+Manage Claude Code containers (claude-*, zed-*), images, and builder cache.
 
-Commands:
-  --list              List all containers and their status (default)
-  --stop [NAME]       Stop a specific container, or all if no name given
-  --remove [NAME]     Delete a specific stopped container, or all stopped
-  --prune             Stop and delete all containers
-  --images            List claudecode-* images
-  --images --prune    Delete all claudecode-* images
-  -h, --help          Show this help and exit
+Containers:
+  --list                  List all containers and their status (default)
+  --stop [NAME]           Stop a specific container, or all if no name given
+  --remove [NAME]         Delete a specific stopped container, or all stopped
+  --prune                 Stop and delete all containers
+
+Images:
+  --images                List claudecode-* images with sizes
+  --images --prune        Delete all claudecode-* images
+
+Builder cache:
+  --builder-clear-cache   Stop and delete the builder (clears BuildKit layer cache)
+  --builder-restart       Clear cache and restart builder with configured resources
+
+Full cleanup:
+  --full-cleanup          Stop/remove all containers + delete images + clear builder cache
+  --disk-usage            Show container system disk usage
+
+Other:
+  -h, --help              Show this help and exit
 EOF
+}
+
+# ── TOML reader (copied from launch.sh) ──────────────────────────────────────
+toml_get() {
+    local section="$1"
+    local key="$2"
+    local file="$3"
+    awk -v section="$section" -v key="$key" '
+        function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
+        function rtrim(s) { sub(/[ \t\r\n]+$/, "", s); return s }
+        function trim(s) { return rtrim(ltrim(s)) }
+
+        /^[ \t]*#/ { next }
+        /^[ \t]*\[/ {
+            in_section = ($0 ~ "^[ \\t]*\\[" section "\\][ \\t]*$")
+            next
+        }
+
+        in_section {
+            line = $0
+            if (line ~ "^[ \\t]*" key "[ \\t]*=") {
+                sub(/^[^=]*=/, "", line)
+                line = trim(line)
+                if (line ~ /^"/) {
+                    sub(/^"/, "", line)
+                    sub(/".*/, "", line)
+                } else {
+                    sub(/[ \t]*#.*$/, "", line)
+                    line = rtrim(line)
+                }
+                print line
+                exit
+            }
+        }
+    ' "$file"
 }
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -153,12 +202,48 @@ cmd_images() {
             container image rm "$img" 2>/dev/null && echo "  deleted" || echo "  failed (in use?)"
         done <<< "$images"
     else
-        printf "%-40s\n" "IMAGE"
-        printf "%-40s\n" "-----"
-        while IFS= read -r img; do
-            echo "$img"
-        done <<< "$images"
+        echo "claudecode-* images:"
+        container image list --verbose 2>/dev/null | head -1
+        container image list --verbose 2>/dev/null | grep "^${IMAGE_PREFIX}" || true
     fi
+}
+
+# ── Builder cache ─────────────────────────────────────────────────────────────
+cmd_builder_clear_cache() {
+    echo "Stopping builder..."
+    container builder stop 2>/dev/null || true
+    echo "Deleting builder (clears build cache)..."
+    container builder delete 2>/dev/null || true
+    echo "Builder cache cleared."
+}
+
+cmd_builder_restart() {
+    cmd_builder_clear_cache
+    local cfg="${SCRIPT_DIR}/container-build.toml"
+    local build_cpus=2 build_memory="4g"
+    if [[ -f "$cfg" ]]; then
+        local _cpus _mem
+        _cpus="$(toml_get builder cpus "$cfg" || true)"
+        _mem="$(toml_get builder memory "$cfg" || true)"
+        build_cpus="${_cpus:-2}"
+        build_memory="${_mem:-4g}"
+    fi
+    echo "Restarting builder (${build_cpus} CPUs, ${build_memory} memory)..."
+    container builder start --cpus "$build_cpus" --memory "$build_memory"
+}
+
+# ── Full cleanup ─────────────────────────────────────────────────────────────
+cmd_full_cleanup() {
+    cmd_prune
+    echo ""
+    cmd_images --prune
+    echo ""
+    cmd_builder_clear_cache
+}
+
+# ── Disk usage ───────────────────────────────────────────────────────────────
+cmd_disk_usage() {
+    container system df
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -179,6 +264,18 @@ case "$COMMAND" in
         ;;
     --images)
         cmd_images "${2:-}"
+        ;;
+    --builder-clear-cache)
+        cmd_builder_clear_cache
+        ;;
+    --builder-restart)
+        cmd_builder_restart
+        ;;
+    --full-cleanup)
+        cmd_full_cleanup
+        ;;
+    --disk-usage)
+        cmd_disk_usage
         ;;
     -h|--help)
         usage
