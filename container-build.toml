@@ -21,4 +21,4 @@ memory = "4g"
 [features]
 # Install claude-agent-acp for connecting Claude Code to Zed editor.
 # Adds ~50MB to the image. Default is OFF.
-install_claude_agent_acp = true
+install_claude_agent_acp = false

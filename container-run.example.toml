@@ -37,6 +37,14 @@ claude_skip_permissions = "yolo"
 # Useful for project-specific instructions (e.g., "Always use pytest", "Prefer Go modules").
 claude_additional_system_prompt = ""
 
+# Model to use for the container session. Accepts aliases (sonnet, opus, haiku)
+# or full model IDs (claude-haiku-4-5-20251001). Empty = use default from settings.json.
+claude_model = "haiku"
+
+# Initial prompt sent to Claude when the session starts.
+# Useful for environment verification on a cheap model before switching.
+claude_query = "Read @CONTAINER.md and verify environment. Check sudo, network access, timezone, github access"
+
 [workspace]
 # Additional patterns to exclude when copying workspace into the container.
 # These are ADDED to the built-in defaults (.venv, node_modules, __pycache__, etc.)

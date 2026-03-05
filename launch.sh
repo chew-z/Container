@@ -355,6 +355,8 @@ if [[ -f "$PROJECT_RUN_CONFIG" ]]; then
     esac
 
     CLAUDE_ADDITIONAL_SYSTEM_PROMPT="$(toml_get claude claude_additional_system_prompt "$PROJECT_RUN_CONFIG" || true)"
+    CLAUDE_MODEL="$(toml_get claude claude_model "$PROJECT_RUN_CONFIG" || true)"
+    CLAUDE_QUERY="$(toml_get claude claude_query "$PROJECT_RUN_CONFIG" || true)"
 
     # [workspace] additional_excludes — newline-separated list
     _excludes_lines="$(toml_get_array workspace additional_excludes "$PROJECT_RUN_CONFIG" || true)"
@@ -393,6 +395,11 @@ EXTRA_CLAUDE_ARGS=("--append-system-prompt" "You MUST read CONTAINER.md in the w
 # Append project-specific system prompt if configured
 if [[ -n "$CLAUDE_ADDITIONAL_SYSTEM_PROMPT" ]]; then
     EXTRA_CLAUDE_ARGS=("--append-system-prompt" "$CLAUDE_ADDITIONAL_SYSTEM_PROMPT" "${EXTRA_CLAUDE_ARGS[@]+"${EXTRA_CLAUDE_ARGS[@]}"}")
+fi
+
+# Apply model override if configured
+if [[ -n "${CLAUDE_MODEL:-}" ]]; then
+    EXTRA_CLAUDE_ARGS+=("--model" "$CLAUDE_MODEL")
 fi
 
 # ── Construct mount arguments ─────────────────────────────────────────────────
@@ -454,5 +461,10 @@ if [[ -n "$SSH_KNOWN_HOSTS" ]]; then
 fi
 
 RUN_ARGS+=("$IMAGE" "${EXTRA_CLAUDE_ARGS[@]+"${EXTRA_CLAUDE_ARGS[@]}"}")
+
+# Append initial query if configured
+if [[ -n "${CLAUDE_QUERY:-}" ]]; then
+    RUN_ARGS+=("$CLAUDE_QUERY")
+fi
 
 exec "${RUN_ARGS[@]}"

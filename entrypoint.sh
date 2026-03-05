@@ -10,6 +10,12 @@ case "${1:-}" in
         ;;
 esac
 
+# ── 0. Set timezone from TZ env var ──────────────────────────────────────────
+if [[ -n "${TZ:-}" ]]; then
+    echo "$TZ" | sudo tee /etc/timezone > /dev/null
+    sudo ln -sf "/usr/share/zoneinfo/$TZ" /etc/localtime
+fi
+
 # ── 1. Copy ~/.claude config from host mount (essentials only) ────────────────
 if [[ -d /mnt/in/claude_dir ]]; then
     echo "[entrypoint] Copying ~/.claude config (essentials only)..." >&2
