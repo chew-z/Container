@@ -83,6 +83,7 @@ if [[ "${SANDBOX_COPY_MODE:-0}" == "1" ]]; then
     mkdir -p /workspace
     EXCLUDE_ARGS=(
         --exclude='.venv'
+        --exclude='.venv-*'
         --exclude='venv'
         --exclude='node_modules'
         --exclude='__pycache__'
@@ -96,7 +97,11 @@ if [[ "${SANDBOX_COPY_MODE:-0}" == "1" ]]; then
         --exclude='.github'
         --exclude='.codex'
         --exclude='.codanna'
-        --exclude='bin/linux'
+        --exclude='.uv'
+        --exclude='*.egg-info'
+        --exclude='dist'
+        --exclude='build'
+        --exclude='container-run.toml'
     )
     # Append project-specific excludes from EXTRA_EXCLUDES env (newline-separated)
     if [[ -n "${EXTRA_EXCLUDES:-}" ]]; then

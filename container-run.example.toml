@@ -48,6 +48,11 @@ claude_additional_system_prompt = ""
 # For explicit path control, prefer root-anchored patterns like "./dist".
 additional_excludes = []
 
+[environment]
+# Timezone for the container (IANA format). Affects git timestamps, logs, etc.
+# Default: Europe/Warsaw
+timezone = "Europe/Warsaw"
+
 [credentials]
 # Git hosts to add to known_hosts via ssh-keyscan.
 # Default (when empty or absent): github.com only.

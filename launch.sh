@@ -336,6 +336,7 @@ CLAUDE_SIMPLE_MODE="1"
 SKIP_PERMISSIONS="yolo"
 EXTRA_EXCLUDES=""
 SSH_KNOWN_HOSTS=""
+CONTAINER_TZ=""
 CLAUDE_ADDITIONAL_SYSTEM_PROMPT=""
 if [[ -f "$PROJECT_RUN_CONFIG" ]]; then
     [[ -z "$RUN_MEMORY" ]] && RUN_MEMORY="$(toml_get resources memory "$PROJECT_RUN_CONFIG" || true)"
@@ -366,11 +367,15 @@ if [[ -f "$PROJECT_RUN_CONFIG" ]]; then
     if [[ -n "$_hosts_lines" ]]; then
         SSH_KNOWN_HOSTS="$_hosts_lines"
     fi
+
+    # [environment] timezone
+    CONTAINER_TZ="$(toml_get environment timezone "$PROJECT_RUN_CONFIG" || true)"
 fi
 
 # Defaults (CLI flags > container-run.toml > defaults)
 RUN_MEMORY="${RUN_MEMORY:-2g}"
 RUN_CPUS="${RUN_CPUS:-4}"
+CONTAINER_TZ="${CONTAINER_TZ:-Europe/Warsaw}"
 
 # Compose permission flags for claude
 case "$SKIP_PERMISSIONS" in
@@ -433,6 +438,7 @@ RUN_ARGS=(
     -e "CLAUDE_AUTO_UPDATE=${CLAUDE_AUTO_UPDATE}"
     -e "ANTHROPIC_API_KEY="
     -e "GH_TOKEN=${GH_TOKEN}"
+    -e "TZ=${CONTAINER_TZ}"
 )
 
 if [[ "$CLAUDE_SIMPLE_MODE" == "1" ]]; then

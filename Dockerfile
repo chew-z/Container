@@ -30,6 +30,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
     procps \
     less \
+    sudo \
+    tree \
+    patch \
+    file \
  && rm -rf /var/lib/apt/lists/*
 
 # ── fd (upstream binary — Debian's fd-find installs as fdfind) ───────────
@@ -39,7 +43,8 @@ RUN curl -fsSL "https://github.com/sharkdp/fd/releases/download/v${FD_VERSION}/f
     rm -rf /tmp/fd-v${FD_VERSION}-aarch64-unknown-linux-gnu
 
 # ── sandbox user ─────────────────────────────────────────────────────────────
-RUN useradd -m -s /bin/bash sandbox
+RUN useradd -m -s /bin/bash sandbox && \
+    echo 'sandbox ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/sandbox
 
 # ── Git safe directory (bind-mounted repos) ──────────────────────────────────
 RUN git config --system safe.directory '*'
@@ -84,6 +89,7 @@ RUN if [[ "${INSTALL_CLAUDE_AGENT_ACP}" == "1" ]]; then \
 
 # ── PATH + working directory ────────────────────────────────────────────────
 ENV PATH=/home/sandbox/.local/bin:/home/sandbox/.cargo/bin:$PATH
+ENV TERM=xterm-256color
 WORKDIR /home/sandbox
 
 # ── Entrypoint ──────────────────────────────────────────────────────────────
@@ -145,10 +151,12 @@ USER sandbox
 RUN go install golang.org/x/tools/gopls@latest && \
     go install golang.org/x/tools/cmd/goimports@latest && \
     go install gotest.tools/gotestsum@latest && \
-    go install golang.org/x/vuln/cmd/govulncheck@latest
+    go install golang.org/x/vuln/cmd/govulncheck@latest && \
+    go install github.com/go-delve/delve/cmd/dlv@latest
 RUN go version && \
     golangci-lint version && \
     gopls version >/dev/null && \
     command -v goimports && \
     gotestsum --version >/dev/null && \
-    govulncheck -version >/dev/null
+    govulncheck -version >/dev/null && \
+    dlv version >/dev/null

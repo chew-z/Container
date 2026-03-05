@@ -27,10 +27,16 @@ session, inform the user and they can approve.
 
 ## Available Tools
 
-- git, gh (GitHub CLI), jq, ripgrep, fd, fzf, uv
+- git, gh (GitHub CLI), jq, ripgrep, fd, fzf, tree, patch, file, uv
 - openssh-client (SSH keys pre-configured for github.com)
-- You can install additional packages with `sudo apt-get install -y <package>`
-  or Python packages with `uv pip install <package>`
+- `sandbox` user has passwordless sudo
+- Install system packages: `sudo apt-get update && sudo apt-get install -y <package>`
+- Install Python packages: `uv pip install <package>`
+
+## Network
+
+This container has full internet access. You can download packages, clone repos,
+and push to remotes. Verify with `curl https://icanhazip.com`.
 
 ## Python Development
 

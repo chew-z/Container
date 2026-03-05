@@ -42,6 +42,10 @@ claude_additional_system_prompt = ""
 # Each pattern is passed as --exclude to tar.
 additional_excludes = ["bin"]
 
+[environment]
+# Timezone for the container (IANA format). Affects git timestamps, logs, etc.
+timezone = "Europe/Warsaw"
+
 [credentials]
 # Git hosts to add to known_hosts via ssh-keyscan.
 # Default (when empty or absent): github.com only.
