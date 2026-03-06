@@ -115,6 +115,18 @@ toml_get_array() {
             next
         }
 
+        in_section && accumulating {
+            line = $0
+            # Strip inline comments
+            sub(/#.*$/, "", line)
+            buf = buf " " trim(line)
+            if (buf ~ /\]/) {
+                print buf
+                exit
+            }
+            next
+        }
+
         in_section {
             line = $0
             if (line ~ "^[ \\t]*" key "[ \\t]*=") {
@@ -122,6 +134,12 @@ toml_get_array() {
                 line = trim(line)
                 # Strip inline comment outside the array
                 sub(/\][ \t]*#.*$/, "]", line)
+                if (line ~ /\[/ && line !~ /\]/) {
+                    # Opening bracket but no closing — multi-line array
+                    buf = line
+                    accumulating = 1
+                    next
+                }
                 print line
                 exit
             }
@@ -379,16 +397,44 @@ if [[ -f "$PROJECT_RUN_CONFIG" ]]; then
         true|1|yes|on) MCP_ENABLED=1 ;;
         *) MCP_ENABLED=0 ;;
     esac
-    if [[ "$MCP_ENABLED" == "1" && "$CLAUDE_SIMPLE_MODE" == "0" ]]; then
+    if [[ "$MCP_ENABLED" == "1" ]]; then
         MCP_BASE_URL="$(toml_get mcp base_url "$PROJECT_RUN_CONFIG" || true)"
-        # Read servers array as newline-separated "name path" pairs
+        # Read servers array as newline-separated "name path keychain-service" entries
         MCP_SERVERS_RAW="$(toml_get_array mcp servers "$PROJECT_RUN_CONFIG" || true)"
-        if [[ -z "${MCP_AUTH_TOKEN:-}" ]]; then
-            echo "WARNING: MCP is enabled but MCP_AUTH_TOKEN is not set. MCP servers will not be registered." >&2
-        fi
-    elif [[ "$MCP_ENABLED" == "1" && "$CLAUDE_SIMPLE_MODE" == "1" ]]; then
-        echo "WARNING: MCP is enabled but claude_simple_mode is true. MCP requires simple mode disabled." >&2
-        MCP_ENABLED=0
+
+        # Extract per-server tokens from Keychain (fallback: environment variables)
+        # Collect unique keychain service names, fetch each token once
+        MCP_TOKENS=""
+        declare -A _token_cache=()
+        _missing_tokens=0
+        while IFS= read -r _entry; do
+            [[ -z "$_entry" ]] && continue
+            _keychain="$(echo "$_entry" | awk '{print $3}')"
+            [[ -z "$_keychain" ]] && continue
+            # Skip if already fetched
+            [[ -n "${_token_cache[$_keychain]+x}" ]] && continue
+            # Try Keychain first, then environment variable
+            _token="$(security find-generic-password -s "$_keychain" -w 2>/dev/null || true)"
+            if [[ -z "$_token" ]]; then
+                # Fallback: MCP_TOKEN_PUSHOVER from "mcp:pushover"
+                _env_name="MCP_TOKEN_$(echo "${_keychain#mcp:}" | tr '[:lower:]' '[:upper:]')"
+                _token="${!_env_name:-}"
+            fi
+            if [[ -n "$_token" ]]; then
+                _token_cache[$_keychain]="$_token"
+            else
+                echo "WARNING: No token found for '$_keychain' (Keychain or \$$_env_name)" >&2
+                _token_cache[$_keychain]=""
+                _missing_tokens=1
+            fi
+        done <<< "$MCP_SERVERS_RAW"
+
+        # Build MCP_TOKENS as newline-separated "keychain-service token" pairs
+        for _k in "${!_token_cache[@]}"; do
+            [[ -z "${_token_cache[$_k]}" ]] && continue
+            MCP_TOKENS+="${_k} ${_token_cache[$_k]}"$'\n'
+        done
+        unset _token_cache
     fi
 fi
 
@@ -478,10 +524,15 @@ if [[ -n "$SSH_KNOWN_HOSTS" ]]; then
     RUN_ARGS+=(-e "SSH_KNOWN_HOSTS=${SSH_KNOWN_HOSTS}")
 fi
 
-if [[ "${MCP_ENABLED:-0}" == "1" && -n "${MCP_AUTH_TOKEN:-}" && -n "${MCP_BASE_URL:-}" && -n "${MCP_SERVERS_RAW:-}" ]]; then
-    RUN_ARGS+=(-e "MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN}")
-    RUN_ARGS+=(-e "MCP_BASE_URL=${MCP_BASE_URL}")
-    RUN_ARGS+=(-e "MCP_SERVERS=${MCP_SERVERS_RAW}")
+if [[ "${MCP_ENABLED:-0}" == "1" ]]; then
+    if [[ -n "${MCP_TOKENS:-}" && -n "${MCP_BASE_URL:-}" && -n "${MCP_SERVERS_RAW:-}" ]]; then
+        RUN_ARGS+=(-e "MCP_TOKENS=${MCP_TOKENS}")
+        RUN_ARGS+=(-e "MCP_BASE_URL=${MCP_BASE_URL}")
+        RUN_ARGS+=(-e "MCP_SERVERS=${MCP_SERVERS_RAW}")
+        echo "==> MCP: ${MCP_BASE_URL} with $(echo "$MCP_SERVERS_RAW" | wc -l | tr -d ' ') server(s)"
+    else
+        echo "WARNING: MCP enabled but missing vars — TOKENS=${MCP_TOKENS:+set}, BASE_URL=${MCP_BASE_URL:+set}, SERVERS=${MCP_SERVERS_RAW:+set}" >&2
+    fi
 fi
 
 RUN_ARGS+=("$IMAGE" "${EXTRA_CLAUDE_ARGS[@]+"${EXTRA_CLAUDE_ARGS[@]}"}")

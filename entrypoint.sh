@@ -59,7 +59,8 @@ if [[ -d /mnt/in/home/.ssh ]]; then
     echo "[entrypoint] Copying SSH keys..." >&2
     mkdir -p /home/sandbox/.ssh
     cp /mnt/in/home/.ssh/id_* /home/sandbox/.ssh/ 2>/dev/null || true
-    cp /mnt/in/home/.ssh/config /home/sandbox/.ssh/ 2>/dev/null || true
+    # SSH config not copied — host uses macOS Secure Enclave (Secretive) which
+    # doesn't work in Linux. Git access is via HTTPS+GH_TOKEN (see section 2.7).
     chmod 700 /home/sandbox/.ssh
     chmod 600 /home/sandbox/.ssh/* 2>/dev/null || true
     # Keyscan hosts: SSH_KNOWN_HOSTS env (newline-separated) or default to github.com
@@ -72,6 +73,17 @@ fi
 if [[ -f /mnt/in/home/.gitconfig ]]; then
     echo "[entrypoint] Copying .gitconfig..." >&2
     cp /mnt/in/home/.gitconfig /home/sandbox/.gitconfig
+    # Remove host's SSH-to-HTTPS rewrites — they break token-based auth in the container
+    git config --global --unset-all 'url.git@github.com:.insteadOf' 2>/dev/null || true
+    git config --global --unset-all 'url.ssh://git@github.com/.insteadOf' 2>/dev/null || true
+fi
+
+# ── 2.7 Configure git to use GH_TOKEN for GitHub over HTTPS ─────────────────
+# Host SSH keys (macOS Secure Enclave, Secretive) don't work in Linux containers.
+# When GH_TOKEN is available, rewrite SSH remote URLs to HTTPS with token auth.
+if [[ -n "${GH_TOKEN:-}" ]]; then
+    git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "git@github.com:"
+    git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
 fi
 
 if command -v go &>/dev/null; then
@@ -108,6 +120,7 @@ if [[ "${SANDBOX_COPY_MODE:-0}" == "1" ]]; then
         --exclude='dist'
         --exclude='build'
         --exclude='container-run.toml'
+        --exclude='.mcp.json'
     )
     # Append project-specific excludes from EXTRA_EXCLUDES env (newline-separated)
     if [[ -n "${EXTRA_EXCLUDES:-}" ]]; then
@@ -126,17 +139,33 @@ if [[ "${SANDBOX_COPY_MODE:-0}" == "1" ]]; then
 fi
 
 # ── 3.5 Register MCP servers ─────────────────────────────────────────────────
-if [[ -n "${MCP_SERVERS:-}" && -n "${MCP_AUTH_TOKEN:-}" && -n "${MCP_BASE_URL:-}" ]]; then
+# Always start with empty .mcp.json — host configs have broken stdio paths
+echo '{"mcpServers": {}}' > /workspace/.mcp.json
+
+if [[ -n "${MCP_SERVERS:-}" && -n "${MCP_TOKENS:-}" && -n "${MCP_BASE_URL:-}" ]]; then
     echo "[entrypoint] Registering MCP servers..." >&2
     _mcp_names=()
     while IFS= read -r _entry; do
         [[ -z "$_entry" ]] && continue
-        _name="${_entry%% *}"
-        _path="${_entry#* }"
-        echo "[entrypoint]   Adding: $_name -> ${MCP_BASE_URL}${_path}" >&2
-        claude mcp add --transport http "$_name" "${MCP_BASE_URL}${_path}" \
-            --header "Authorization: Bearer ${MCP_AUTH_TOKEN}" \
-            -s project
+        _name="$(echo "$_entry" | awk '{print $1}')"
+        _path="$(echo "$_entry" | awk '{print $2}')"
+        _keychain="$(echo "$_entry" | awk '{print $3}')"
+        # Look up token from MCP_TOKENS by keychain service name
+        _token=""
+        if [[ -n "$_keychain" ]]; then
+            _token="$(echo "$MCP_TOKENS" | awk -v svc="$_keychain" '$1 == svc {print $2; exit}')"
+        fi
+        if [[ -z "$_token" ]]; then
+            echo "[entrypoint]   SKIP: $_name (no token for $_keychain)" >&2
+            continue
+        fi
+        if (cd /workspace && claude mcp add --transport http "$_name" "${MCP_BASE_URL}${_path}" \
+            --header "Authorization: Bearer ${_token}" \
+            -s project) > /dev/null 2>&1; then
+            echo "[entrypoint]   OK: $_name" >&2
+        else
+            echo "[entrypoint]   FAILED: $_name" >&2
+        fi
         _mcp_names+=("$_name")
     done <<< "$MCP_SERVERS"
     if [[ ${#_mcp_names[@]} -gt 0 ]]; then

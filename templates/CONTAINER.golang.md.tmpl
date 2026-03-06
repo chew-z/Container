@@ -29,7 +29,7 @@ session, inform the user and they can approve.
 ## Available Tools
 
 - git, gh (GitHub CLI), jq, ripgrep, fd, fzf, tree, patch, file
-- openssh-client (SSH keys pre-configured for github.com)
+- GitHub access is HTTPS-only via `GH_TOKEN` — all `git@github.com:` URLs are automatically rewritten to HTTPS. Use `git` and `gh` CLI normally. Do not modify SSH configuration.
 - `sandbox` user has passwordless sudo
 - Install system packages: `sudo apt-get update && sudo apt-get install -y <package>`
 - Install Go tools: `go install <module>@latest`

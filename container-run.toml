@@ -60,15 +60,21 @@ timezone = "Europe/Warsaw"
 ssh_known_hosts = ["github.com"]
 
 [mcp]
-# Enable MCP servers in the container (requires claude_simple_mode = false).
+# Enable MCP servers in the container.
 enabled = true
 
 # Base URL for remote MCP servers (shared across all entries).
-# Auth token comes from MCP_AUTH_TOKEN env var on the host.
 base_url = "https://karma.rrj.pl"
 
 # Remote MCP servers to register via `claude mcp add --transport http`.
-# Format: "name path" pairs (comma-separated, single line). Full URL = base_url + path.
+# Format: "name path keychain-service" — 3 fields separated by spaces.
+# Full URL = base_url + path. Token is extracted from macOS Keychain by keychain-service.
+# Servers sharing a token reference the same keychain service (e.g., answer + gemini).
 # IMPORTANT: Server names MUST match host names (no "-remote" suffix!) so that
 # existing permissions in .claude/settings.local.json are honored inside the container.
-servers = ["pushover /pushover/mcp/", "gemini /gemini/mcp/"]
+servers = [
+    "pushover /pushover/mcp/ mcp:pushover",
+    "gemini /gemini/mcp/ mcp:gemini",
+    "time /time/mcp/ mcp:time",
+    "answer /answer/mcp/ mcp:gemini"
+]

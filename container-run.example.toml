@@ -67,18 +67,36 @@ timezone = "Europe/Warsaw"
 ssh_known_hosts = ["github.com"]
 
 [mcp]
-# Enable MCP servers in the container (requires claude_simple_mode = false).
+# Enable MCP servers in the container.
 # When enabled, remote MCP servers are registered via `claude mcp add --transport http`.
-# Auth token comes from MCP_AUTH_TOKEN env var on the host.
+# Each server gets its own JWT token, extracted from macOS Keychain or environment.
 enabled = false
 
 # Base URL for remote MCP servers (shared across all entries).
 base_url = "https://karma.rrj.pl"
 
 # Remote MCP servers to register.
-# Format: "name path" pairs (comma-separated, single line). Full URL = base_url + path.
+# Format: "name path keychain-service" — 3 fields separated by spaces.
+# Full URL = base_url + path. Token is looked up by keychain-service name.
+#
+# Token resolution (first match wins):
+#   1. macOS Keychain: security find-generic-password -s "mcp:pushover" -w
+#   2. Environment variable: MCP_TOKEN_PUSHOVER (uppercased name after "mcp:")
+#
+# One-time Keychain setup per server:
+#   security add-generic-password -s "mcp:pushover" -a "$USER" -w "TOKEN_HERE"
+#   security add-generic-password -s "mcp:gemini"   -a "$USER" -w "TOKEN_HERE"
+#
+# Or via ~/.zshenv (fallback):
+#   export MCP_TOKEN_PUSHOVER="TOKEN_HERE"
+#   export MCP_TOKEN_GEMINI="TOKEN_HERE"
+#
+# Servers sharing a token reference the same keychain service (e.g., answer + gemini).
 # IMPORTANT: Server names MUST match host names (no "-remote" suffix!) so that
 # existing permissions in .claude/settings.local.json are honored inside the container.
-# e.g. "pushover" → mcp__pushover__send_notification (matches host permission rules)
-# The list is user-configurable — remove servers you don't need.
-servers = ["pushover /pushover/mcp/", "gemini /gemini/mcp/"]
+servers = [
+    "pushover /pushover/mcp/ mcp:pushover",
+    "gemini /gemini/mcp/ mcp:gemini",
+    "time /time/mcp/ mcp:time",
+    "answer /answer/mcp/ mcp:gemini"
+]
