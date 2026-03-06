@@ -65,3 +65,20 @@ timezone = "Europe/Warsaw"
 # Git hosts to add to known_hosts via ssh-keyscan.
 # Default (when empty or absent): github.com only.
 ssh_known_hosts = ["github.com"]
+
+[mcp]
+# Enable MCP servers in the container (requires claude_simple_mode = false).
+# When enabled, remote MCP servers are registered via `claude mcp add --transport http`.
+# Auth token comes from MCP_AUTH_TOKEN env var on the host.
+enabled = false
+
+# Base URL for remote MCP servers (shared across all entries).
+base_url = "https://karma.rrj.pl"
+
+# Remote MCP servers to register.
+# Format: "name path" pairs (comma-separated, single line). Full URL = base_url + path.
+# IMPORTANT: Server names MUST match host names (no "-remote" suffix!) so that
+# existing permissions in .claude/settings.local.json are honored inside the container.
+# e.g. "pushover" → mcp__pushover__send_notification (matches host permission rules)
+# The list is user-configurable — remove servers you don't need.
+servers = ["pushover /pushover/mcp/", "gemini /gemini/mcp/"]

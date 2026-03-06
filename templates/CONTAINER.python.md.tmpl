@@ -70,3 +70,11 @@ ANTHROPIC_BASE_URL=https://api.anthropic.com
 
 All compiled extensions and native binaries are Linux arm64 — they will not run
 on macOS.
+
+<if HAS_MCP>
+## MCP Servers
+
+Remote MCP servers are registered via HTTP transport:
+{{MCP_SERVER_LIST}}
+These servers are configured automatically. Use their tools normally.
+</if>

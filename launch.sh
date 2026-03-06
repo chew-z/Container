@@ -372,6 +372,24 @@ if [[ -f "$PROJECT_RUN_CONFIG" ]]; then
 
     # [environment] timezone
     CONTAINER_TZ="$(toml_get environment timezone "$PROJECT_RUN_CONFIG" || true)"
+
+    # [mcp] remote MCP servers
+    _mcp_enabled_raw="$(toml_get mcp enabled "$PROJECT_RUN_CONFIG" || true)"
+    case "${_mcp_enabled_raw,,}" in
+        true|1|yes|on) MCP_ENABLED=1 ;;
+        *) MCP_ENABLED=0 ;;
+    esac
+    if [[ "$MCP_ENABLED" == "1" && "$CLAUDE_SIMPLE_MODE" == "0" ]]; then
+        MCP_BASE_URL="$(toml_get mcp base_url "$PROJECT_RUN_CONFIG" || true)"
+        # Read servers array as newline-separated "name path" pairs
+        MCP_SERVERS_RAW="$(toml_get_array mcp servers "$PROJECT_RUN_CONFIG" || true)"
+        if [[ -z "${MCP_AUTH_TOKEN:-}" ]]; then
+            echo "WARNING: MCP is enabled but MCP_AUTH_TOKEN is not set. MCP servers will not be registered." >&2
+        fi
+    elif [[ "$MCP_ENABLED" == "1" && "$CLAUDE_SIMPLE_MODE" == "1" ]]; then
+        echo "WARNING: MCP is enabled but claude_simple_mode is true. MCP requires simple mode disabled." >&2
+        MCP_ENABLED=0
+    fi
 fi
 
 # Defaults (CLI flags > container-run.toml > defaults)
@@ -458,6 +476,12 @@ fi
 
 if [[ -n "$SSH_KNOWN_HOSTS" ]]; then
     RUN_ARGS+=(-e "SSH_KNOWN_HOSTS=${SSH_KNOWN_HOSTS}")
+fi
+
+if [[ "${MCP_ENABLED:-0}" == "1" && -n "${MCP_AUTH_TOKEN:-}" && -n "${MCP_BASE_URL:-}" && -n "${MCP_SERVERS_RAW:-}" ]]; then
+    RUN_ARGS+=(-e "MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN}")
+    RUN_ARGS+=(-e "MCP_BASE_URL=${MCP_BASE_URL}")
+    RUN_ARGS+=(-e "MCP_SERVERS=${MCP_SERVERS_RAW}")
 fi
 
 RUN_ARGS+=("$IMAGE" "${EXTRA_CLAUDE_ARGS[@]+"${EXTRA_CLAUDE_ARGS[@]}"}")

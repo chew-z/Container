@@ -72,3 +72,11 @@ golangci-lint run ./...
 gotestsum -- -race ./...
 govulncheck ./...
 ```
+
+<if HAS_MCP>
+## MCP Servers
+
+Remote MCP servers are registered via HTTP transport:
+{{MCP_SERVER_LIST}}
+These servers are configured automatically. Use their tools normally.
+</if>

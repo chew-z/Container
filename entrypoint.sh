@@ -22,7 +22,7 @@ if [[ -d /mnt/in/claude_dir ]]; then
     mkdir -p /home/sandbox/.claude
 
     # Config files
-    for f in settings.json CLAUDE.md; do
+    for f in settings.json settings.local.json CLAUDE.md; do
         [[ -f /mnt/in/claude_dir/$f ]] && cp -p "/mnt/in/claude_dir/$f" "/home/sandbox/.claude/$f"
     done
 
@@ -125,6 +125,29 @@ if [[ "${SANDBOX_COPY_MODE:-0}" == "1" ]]; then
     tar -C /mnt/in/workspace "${EXCLUDE_ARGS[@]}" -cf - . | tar -C /workspace -xf -
 fi
 
+# ── 3.5 Register MCP servers ─────────────────────────────────────────────────
+if [[ -n "${MCP_SERVERS:-}" && -n "${MCP_AUTH_TOKEN:-}" && -n "${MCP_BASE_URL:-}" ]]; then
+    echo "[entrypoint] Registering MCP servers..." >&2
+    _mcp_names=()
+    while IFS= read -r _entry; do
+        [[ -z "$_entry" ]] && continue
+        _name="${_entry%% *}"
+        _path="${_entry#* }"
+        echo "[entrypoint]   Adding: $_name -> ${MCP_BASE_URL}${_path}" >&2
+        claude mcp add --transport http "$_name" "${MCP_BASE_URL}${_path}" \
+            --header "Authorization: Bearer ${MCP_AUTH_TOKEN}" \
+            -s project
+        _mcp_names+=("$_name")
+    done <<< "$MCP_SERVERS"
+    if [[ ${#_mcp_names[@]} -gt 0 ]]; then
+        HAS_MCP=true
+        MCP_SERVER_LIST=""
+        for _n in "${_mcp_names[@]}"; do
+            MCP_SERVER_LIST+="- \`$_n\`"$'\n'
+        done
+    fi
+fi
+
 # ── 4. Generate CONTAINER.md ──────────────────────────────────────────────────
 # Dynamic context file rendered from templates.
 echo "[entrypoint] Generating CONTAINER.md from template..." >&2
@@ -208,6 +231,7 @@ render_template() {
             line="${line//\{\{GO_VERSION\}\}/${GO_VERSION:-unknown}}"
             line="${line//\{\{GOLANGCI_LINT_VERSION\}\}/${GOLANGCI_LINT_VERSION:-unknown}}"
             line="${line//\{\{CLAUDE_VERSION\}\}/${CLAUDE_VERSION:-unknown}}"
+            line="${line//\{\{MCP_SERVER_LIST\}\}/${MCP_SERVER_LIST:-}}"
             printf '%s\n' "$line"
         fi
     done < "$template_path" > "$output_path"
@@ -215,6 +239,7 @@ render_template() {
 
 HAS_ACP=false
 HAS_GOLANGCI_CONFIG=false
+HAS_MCP="${HAS_MCP:-false}"
 PYTHON_VERSION="$(get_python_version)"
 GO_VERSION="$(get_go_version)"
 GOLANGCI_LINT_VERSION="$(get_golangci_lint_version)"
