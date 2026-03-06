@@ -38,7 +38,7 @@ claude_additional_system_prompt = ""
 
 # Model to use for the container session. Accepts aliases (sonnet, opus, haiku)
 # or full model IDs (claude-haiku-4-5-20251001). Empty = use default from settings.json.
-claude_model = ""
+claude_model = "haiku"
 
 # Initial prompt sent to Claude when the session starts.
 # Useful for environment verification on a cheap model before switching.
@@ -61,7 +61,7 @@ ssh_known_hosts = ["github.com"]
 
 [mcp]
 # Enable MCP servers in the container (requires claude_simple_mode = false).
-enabled = false
+enabled = true
 
 # Base URL for remote MCP servers (shared across all entries).
 # Auth token comes from MCP_AUTH_TOKEN env var on the host.
