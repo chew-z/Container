@@ -59,13 +59,16 @@ claude_query = "Read @CONTAINER.md and verify environment"  # Default: ""
 
 **Default:** `true` — sets `CLAUDE_CODE_SIMPLE=1`.
 
-| Simple mode ON (default) | Simple mode OFF |
-|--------------------------|-----------------|
-| No hooks, MCP servers from `.mcp.json`, attachments, or CLAUDE.md processing | Full features enabled |
-| Skips copying `hooks/`, `agents/` from `~/.claude/` | Copies `hooks/`, `agents/` (needs Python 3.12+ for hooks) |
-| Still works: core Claude, settings.json, commands, skills, plugins, credentials, CONTAINER.md | Everything works |
+Simple mode disables:
+- Hooks, agents, session memory, skills
+- CLAUDE.md processing, attachments
+- Skips copying `hooks/`, `agents/` from `~/.claude/`
 
-**Note:** Remote MCP servers configured in `[mcp]` section work regardless of simple mode — they're registered via `claude mcp add`, not `.mcp.json`.
+Simple mode keeps working:
+- Core Claude, settings.json, commands, plugins, credentials, CONTAINER.md
+- **MCP servers registered via `claude mcp add`** (our approach — works fine)
+
+> **Note:** Anthropic docs say simple mode disables MCP servers, but in our experience servers registered via `claude mcp add` (stored in `settings.json`) work fine. This may change in future releases.
 
 #### `claude_skip_permissions`
 

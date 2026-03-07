@@ -20,7 +20,7 @@ Builds ephemeral arm64 containers with full tooling, credential bridging, and wo
 
 - **Two images:** `claudecode-python` (Python 3.14 + uv) and `claudecode-golang` (Go 1.26 + gopls + golangci-lint)
 - **Copy mode** (default): workspace is copied in; changes are ephemeral. `--rw` for live bind mount.
-- **Simple mode** (`CLAUDE_CODE_SIMPLE=1`): skips hooks/agents; default in containers
+- **Simple mode** (`CLAUDE_CODE_SIMPLE=1`): skips hooks, agents, session memory; MCP via `claude mcp add` still works. Default in containers
 - **Permission modes** via `container-run.toml`: `yolo` (skip all), `plan`, or `off`
 - **Credentials:** OAuth from macOS Keychain, gh token, SSH keys — all bridged automatically
 

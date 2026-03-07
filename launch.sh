@@ -47,15 +47,15 @@ Environment:
   CONTAINER_BUILD_CONFIG   Build config path override
   CONTAINER_RUN_CONFIG     Per-project runtime config path override
   CLAUDE_CODE_SIMPLE       Set to 1 (default via claude_simple_mode in config)
-                           to disable hooks, MCP servers, attachments, and
-                           CLAUDE.md files inside the container.
+                           to disable hooks, agents, session memory, attachments,
+                           and CLAUDE.md files inside the container.
+                           MCP via 'claude mcp add' still works in simple mode.
                            To disable: set claude_simple_mode = false in
-                           container-run.toml (requires Python 3.12+ and uv
-                           for hooks)
+                           container-run.toml
 
 Config (container-run.toml [claude]):
-  claude_simple_mode       true (default): lean runtime — no hooks, MCP, CLAUDE.md
-                           false: full-featured (needs Python 3.12+ and uv)
+  claude_simple_mode       true (default): lean runtime — no hooks, agents, CLAUDE.md
+                           false: full-featured (Python 3.12 preferred for hooks)
   claude_skip_permissions  "yolo" (default): --dangerously-skip-permissions
                            "plan": --permission-mode plan
                                    --allow-dangerously-skip-permissions

@@ -13,12 +13,13 @@ memory = "4g"
 cpus = 4
 
 [claude]
-# Sets CLAUDE_CODE_SIMPLE=1 at runtime — disables hooks, MCP servers, attachments,
-# and CLAUDE.md files inside the container.
+# Sets CLAUDE_CODE_SIMPLE=1 at runtime — disables hooks, agents, session memory,
+# attachments, and CLAUDE.md files inside the container.
+# MCP servers registered via `claude mcp add` still work in simple mode.
 #
 # To disable simple mode set claude_simple_mode = false, then:
-#   - Ensure the image has uv and Python 3.12 (needed for hooks)
-#   - Configure MCP servers in settings.json as desired (use http transport for MCP)
+#   - Ensure the image has uv and Python 3.12 (author's current hook preference, not a hard requirement)
+#   - MCP servers in settings.json work regardless of simple mode
 #   - Global hooks from ~/.claude/hooks will be copied into the container
 #
 claude_simple_mode = true
