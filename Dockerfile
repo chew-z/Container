@@ -157,6 +157,7 @@ RUN go install golang.org/x/tools/gopls@latest && \
     go install gotest.tools/gotestsum@latest && \
     go install golang.org/x/vuln/cmd/govulncheck@latest && \
     go install github.com/go-delve/delve/cmd/dlv@latest && \
+    go install github.com/mrjoshuak/godoc-mcp@latest && \
     go clean -modcache -cache
 RUN go version && \
     golangci-lint version && \
@@ -164,7 +165,8 @@ RUN go version && \
     command -v goimports && \
     gotestsum --version >/dev/null && \
     govulncheck -version >/dev/null && \
-    dlv version >/dev/null
+    dlv version >/dev/null && \
+    command -v godoc-mcp
 
 # ── Claude Code (changes weekly — after stable language layers) ─────────────
 ARG CLAUDE_CODE_GCS=https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases

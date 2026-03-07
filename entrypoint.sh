@@ -219,6 +219,19 @@ if [[ -n "$_lsp_plugin" ]]; then
     fi
 fi
 
+# ── 3b. Register godoc-mcp MCP server (Go containers only) ───────────────────
+if command -v godoc-mcp &>/dev/null; then
+    echo "[entrypoint] Registering godoc-mcp MCP server..." >&2
+    if (cd /workspace && claude mcp add godoc --command godoc-mcp \
+        -e GOPATH="$GOPATH" -e GOMODCACHE="$GOMODCACHE" \
+        -s project) > /dev/null 2>&1; then
+        echo "[entrypoint]   OK: godoc" >&2
+        _mcp_names+=("godoc")
+    else
+        echo "[entrypoint]   FAILED: godoc (non-fatal)" >&2
+    fi
+fi
+
 # ── 4. Generate CONTAINER.md ──────────────────────────────────────────────────
 # Dynamic context file rendered from templates.
 echo "[entrypoint] Generating CONTAINER.md from template..." >&2
