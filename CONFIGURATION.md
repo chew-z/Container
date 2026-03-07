@@ -60,11 +60,13 @@ claude_query = "Read @CONTAINER.md and verify environment"  # Default: ""
 **Default:** `true` — sets `CLAUDE_CODE_SIMPLE=1`.
 
 Simple mode disables:
+
 - Hooks, agents, session memory, skills
 - CLAUDE.md processing, attachments
 - Skips copying `hooks/`, `agents/` from `~/.claude/`
 
 Simple mode keeps working:
+
 - Core Claude, settings.json, commands, plugins, credentials, CONTAINER.md
 - **MCP servers registered via `claude mcp add`** (our approach — works fine)
 
@@ -74,11 +76,11 @@ Simple mode keeps working:
 
 **Default:** `"yolo"` — safe because the container is ephemeral and isolated.
 
-| Value | Claude flags | Behavior |
-|-------|-------------|----------|
-| `"yolo"` | `--dangerously-skip-permissions` | Full autonomy |
-| `"plan"` | `--permission-mode plan --allow-dangerously-skip-permissions` | Plan mode, can escalate |
-| `"false"` | _(none)_ | Normal interactive prompts |
+| Value     | Claude flags                                                  | Behavior                   |
+| --------- | ------------------------------------------------------------- | -------------------------- |
+| `"yolo"`  | `--dangerously-skip-permissions`                              | Full autonomy              |
+| `"plan"`  | `--permission-mode plan --allow-dangerously-skip-permissions` | Plan mode, can escalate    |
+| `"false"` | _(none)_                                                      | Normal interactive prompts |
 
 #### `claude_model`
 
@@ -132,6 +134,7 @@ url = "http://192.168.64.1:8090/mcp"
 Connects to `postgres-mcp` running on the host Mac via the Apple Container gateway IP (`192.168.64.1`).
 
 **Host setup:**
+
 ```bash
 postgres-mcp -t http -port 8090 -ip 0.0.0.0 -dsn "postgresql://user:pass@localhost:5432/dbname" --read-only
 ```
@@ -145,7 +148,7 @@ The host's `.mcp.json` is not copied — it has macOS-specific stdio paths. Inst
 ```toml
 [mcp]
 enabled = false
-base_url = "https://karma.rrj.pl"
+base_url = "https://example.com"
 servers = [
     "pushover /pushover/mcp/ mcp:pushover",
     "gemini /gemini/mcp/ mcp:gemini",
@@ -161,10 +164,12 @@ Each entry: `"name path keychain-service"` — 3 fields separated by spaces.
 - **keychain-service** — used to look up auth token
 
 **Token resolution** (first match wins):
+
 1. macOS Keychain: `security find-generic-password -s "mcp:pushover" -w`
 2. Env var: `MCP_TOKEN_PUSHOVER` (uppercased name after `mcp:`)
 
 **One-time Keychain setup:**
+
 ```bash
 security add-generic-password -s "mcp:pushover" -a "$USER" -w "TOKEN_HERE"
 security add-generic-password -s "mcp:gemini"   -a "$USER" -w "TOKEN_HERE"
@@ -178,10 +183,10 @@ Servers sharing a token reference the same keychain service (e.g., `answer` and 
 
 At startup, `entrypoint.sh` renders `CONTAINER.md` from templates telling Claude about the container environment.
 
-| Template | Used when |
-|----------|-----------|
+| Template                             | Used when              |
+| ------------------------------------ | ---------------------- |
 | `templates/CONTAINER.python.md.tmpl` | Python image (default) |
-| `templates/CONTAINER.golang.md.tmpl` | Go image |
+| `templates/CONTAINER.golang.md.tmpl` | Go image               |
 
 ### Placeholders
 

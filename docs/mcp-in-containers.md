@@ -43,10 +43,11 @@ In copy mode, the generated `.mcp.json` is ephemeral — destroyed with the cont
 MCP servers accessible over HTTP. The container connects via HTTPS with bearer token auth.
 
 **Config:** `container-run.toml`
+
 ```toml
 [mcp]
 enabled = true
-base_url = "https://karma.rrj.pl"
+base_url = "https://example.com"
 servers = [
     "pushover /pushover/mcp/ mcp:pushover",
     "gemini /gemini/mcp/ mcp:gemini",
@@ -56,6 +57,7 @@ servers = [
 ```
 
 **Token flow:**
+
 1. `launch.sh` reads each server's keychain-service name
 2. Looks up token from macOS Keychain (`security find-generic-password -s "mcp:pushover"`)
 3. Falls back to env var (`MCP_TOKEN_PUSHOVER`)
@@ -67,11 +69,13 @@ servers = [
 A Postgres MCP server running on the host Mac, reachable from the container through the Apple Container gateway IP (`192.168.64.1`).
 
 **Host setup:**
+
 ```bash
 postgres-mcp -t http -port 8090 -ip 0.0.0.0 -dsn "postgresql://user:pass@localhost:5432/dbname" --read-only
 ```
 
 **Config:** `container-run.toml`
+
 ```toml
 [postgres]
 enabled = true
@@ -88,11 +92,11 @@ If your host's `settings.local.json` already pre-approves tools like `mcp__pusho
 
 ## Files Involved
 
-| File | Role |
-|------|------|
-| `container-run.toml` | `[mcp]` and `[postgres]` configuration |
-| `launch.sh` | Reads config, resolves tokens from Keychain, passes env vars |
-| `entrypoint.sh` | Registers servers via `claude mcp add`, bridges `settings.local.json` |
+| File                 | Role                                                                  |
+| -------------------- | --------------------------------------------------------------------- |
+| `container-run.toml` | `[mcp]` and `[postgres]` configuration                                |
+| `launch.sh`          | Reads config, resolves tokens from Keychain, passes env vars          |
+| `entrypoint.sh`      | Registers servers via `claude mcp add`, bridges `settings.local.json` |
 
 ## Verification
 

@@ -6,3 +6,6 @@
 .github/
 .vscode/
 .mcp.json
+
+container-build.toml
+container-run.toml
