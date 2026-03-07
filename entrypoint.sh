@@ -27,7 +27,7 @@ if [[ -d /mnt/in/claude_dir ]]; then
     done
 
     # Directories — always needed
-    for d in commands skills plugins statsig; do
+    for d in commands skills statsig; do
         [[ -d /mnt/in/claude_dir/$d ]] && cp -rp "/mnt/in/claude_dir/$d" "/home/sandbox/.claude/$d"
     done
 
@@ -190,6 +190,44 @@ if [[ ${#_mcp_names[@]} -gt 0 ]]; then
     for _n in "${_mcp_names[@]}"; do
         MCP_SERVER_LIST+="- \`$_n\`"$'\n'
     done
+fi
+
+# ── 3.6 Install LSP plugins (fresh — host cache has broken paths) ───────────
+if command -v go &>/dev/null; then
+    _lsp_plugin="gopls-lsp@claude-plugins-official"
+    _lsp_disable="pyright-lsp@claude-plugins-official"
+elif command -v python3 &>/dev/null; then
+    _lsp_plugin="pyright-lsp@claude-plugins-official"
+    _lsp_disable="gopls-lsp@claude-plugins-official"
+else
+    _lsp_plugin=""
+    _lsp_disable=""
+fi
+
+if [[ -n "$_lsp_plugin" ]]; then
+    # Register the official marketplace first (plugins dir was not copied from host)
+    echo "[entrypoint] Adding claude-plugins-official marketplace..." >&2
+    if claude plugin marketplace add anthropics/claude-plugins-official \
+        --scope user > /dev/null 2>&1; then
+        echo "[entrypoint]   OK: marketplace added" >&2
+    else
+        echo "[entrypoint]   FAILED: marketplace add (non-fatal)" >&2
+    fi
+
+    echo "[entrypoint] Installing LSP plugin: $_lsp_plugin..." >&2
+    if claude plugin install "$_lsp_plugin" > /dev/null 2>&1; then
+        echo "[entrypoint]   OK: $_lsp_plugin installed" >&2
+        # Enable the installed plugin (install alone doesn't activate it)
+        claude plugin enable "$_lsp_plugin" > /dev/null 2>&1 || true
+        echo "[entrypoint]   OK: $_lsp_plugin enabled" >&2
+    else
+        echo "[entrypoint]   FAILED: $_lsp_plugin (non-fatal)" >&2
+    fi
+
+    # Disable the wrong LSP plugin (host settings.json may have both enabled)
+    if [[ -n "$_lsp_disable" ]]; then
+        claude plugin disable "$_lsp_disable" > /dev/null 2>&1 || true
+    fi
 fi
 
 # ── 4. Generate CONTAINER.md ──────────────────────────────────────────────────

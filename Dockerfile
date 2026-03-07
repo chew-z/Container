@@ -78,6 +78,9 @@ RUN uv python install ${PYTHON_VERSION} && \
     ln -sf "$PYTHON_BIN" /home/sandbox/.local/bin/python3 && \
     ln -sf "$PYTHON_BIN" /home/sandbox/.local/bin/python
 
+# ── pyright (LSP for Claude Code plugin — bundles nodeenv internally) ──────
+RUN uv tool install pyright
+
 # ── Claude Code (changes weekly — after stable language layers) ─────────────
 ARG CLAUDE_CODE_GCS=https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases
 ARG CLAUDE_CODE_VERSION=latest

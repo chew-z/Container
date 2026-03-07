@@ -8,9 +8,9 @@ claude_code = "latest"
 claude_agent_acp = "latest"
 gh = "2.87.3"
 fd = "10.3.0"
-python = "3.14"
-go = "1.26.0"
-golangci_lint = "v2.4.0"
+python = "3.14.3"
+go = "1.26.1"
+golangci_lint = "v2.11.1"
 
 [builder]
 # Resources allocated to the container builder process.
