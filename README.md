@@ -2,117 +2,73 @@
 
 **Run Claude Code inside a sandboxed Linux container on macOS** — full isolation, ephemeral by default, credentials bridged automatically (so uses your Claude Code plan).
 
-```mermaid
-%%{init: {"themeVariables": {"fontSize": "9pt"}, "flowchart": {"htmlLabels": false, "useMaxWidth": false}}}%%
-flowchart LR
-    subgraph Host["macOS Host"]
-        Terminal["Terminal "]
-        Keychain["macOS Keychain "]
-        Project["Project Files "]
-    end
-
-    subgraph Container["Linux Container (arm64)"]
-        Claude["Claude Code "]
-        Tools["git, gh, ripgrep, fd, fzf"]
-    end
-
-    Terminal -->|launch.sh| Claude
-    Keychain -.->|OAuth + gh token| Container
-    Project -->|copy or bind mount| Container
-```
-
-Claude Code runs in an ephemeral, isolated container - it is a strong fit for Claude Code YOLO permission modes like `--dangerously-skip-permissions` or `--allow-dangerously-skip-permissions`: risky actions are sandboxed, and local changes disappear unless user intentionally persist them (for example via git PR).
+Claude Code runs in an ephemeral, isolated container — a strong fit for YOLO permission modes like `--dangerously-skip-permissions`: risky actions are sandboxed, and local changes disappear unless you explicitly persist them via git.
 
 ## Why Apple Container
 
-Apple Container provides Apple Silicon-native Linux containers with lightweight-VM isolation and strong security/privacy-performance tradeoffs ([WWDC25 video](https://developer.apple.com/videos/play/wwdc2025/346/), [container](https://github.com/apple/container), [containerization](https://github.com/apple/containerization), [community deep dive](https://schoenwald.aero/posts/2025-09-14_apple-opensource-containers/)).
-
-It is new tech but superior to Apple Seatbelt that Claude Code use for sandbox by default.
+[Apple Container](https://github.com/apple/container) provides Apple Silicon-native Linux containers with lightweight-VM isolation. Superior to the Seatbelt sandbox that Claude Code uses by default.
 
 ## Prerequisites
 
 - macOS with Apple Silicon
-- Apple's [`container`](https://github.com/apple/container-manager) CLI
+- Apple's [`container`](https://github.com/apple/container) CLI
 - Claude Code authenticated on host (`claude login`)
 - GitHub CLI authenticated on host (`gh auth login`) — optional, for git push/PR workflows
 
 ## Quick Start
 
 ```bash
-./launch.sh --rebuild          # Build image (first time)
-./launch.sh                    # Run Claude Code in sandboxed container
-./launch.sh -C /path/to/project  # Run Claude Code with specific project
-./launch.sh --rebuild --lang golang  # Build image for Golang project (default Python)
+./launch.sh --rebuild                  # Build image (first time)
+./launch.sh                            # Run Claude Code in container
+./launch.sh -C /path/to/project       # Specific project
+./launch.sh --rebuild --lang golang    # Go image
 ```
 
 ## Documentation
 
-| Document                                                            | What's inside                                                         |
-| ------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| [CONFIGURATION.md](CONFIGURATION.md)                                | Build config, feature flags, permission modes, simple mode, templates |
-| [RUNNING.md](RUNNING.md)                                            | Building images, running containers, workspace isolation, cleanup     |
-| [Container Lifecycle](docs/container-lifecycle.md)                   | How containers, images, and builder cache interact; rebuild strategies |
-| [TROUBLESHOOTING.md](TROUBLESHOOTING.md)                            | Common errors and quick fixes                                         |
+| Document | What's inside |
+|----------|---------------|
+| [RUNNING.md](RUNNING.md) | Building images, running containers, workspace modes, cleanup |
+| [CONFIGURATION.md](CONFIGURATION.md) | Build config, runtime config, MCP servers, permissions |
+| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common errors and fixes |
+| [Container Lifecycle](docs/container-lifecycle.md) | How containers, images, and builder cache interact |
+| [MCP in Containers](docs/mcp-in-containers.md) | MCP server architecture and setup details |
 
 ## Files
 
-| File                            | Purpose                                                                                                    |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `Dockerfile`                    | Multi-target image: base + Python or Go                                                                    |
-| `entrypoint.sh`                 | Container startup: copies config, credentials, SSH keys, workspace                                         |
-| `launch.sh`                     | Main runner: optionally builds image, then starts an interactive Claude session in an ephemeral container  |
-| `zed-claude-acp.sh`             | Zed ACP mode (not operational — see below)                                                                 |
-| `cleanup.sh`                    | Manage containers and images (list/stop/remove/prune)                                                      |
-| `container-build.toml`          | Build-time versions and feature flags                                                                      |
-| `container-run.toml`            | Per-project runtime settings (VM resources, Claude mode/permissions, workspace excludes, credential hosts) |
-| `templates/CONTAINER.*.md.tmpl` | Language-specific CONTAINER.md templates                                                                   |
-| `CONTAINER.md`                  | Auto-generated at runtime; tells Claude it's in a Linux container                                          |
-| `.dockerignore`                 | Limits build context to Dockerfile + entrypoint + templates                                                |
+| File | Purpose |
+|------|---------|
+| `Dockerfile` | Multi-target image: base + Python or Go |
+| `entrypoint.sh` | Container startup: config, credentials, workspace, MCP registration |
+| `launch.sh` | Main runner: builds image, extracts credentials, launches container |
+| `cleanup.sh` | Container/image/builder lifecycle management |
+| `container-build.toml` | Build-time versions and feature flags |
+| `container-run.toml` | Per-project runtime: resources, Claude mode, MCP, workspace excludes |
+| `container-run.example.toml` | Annotated example with all options |
+| `templates/CONTAINER.*.md.tmpl` | Language-specific CONTAINER.md templates |
 
 ## Container Images
 
-Multi-target Dockerfile with a shared base and language-specific stages:
+Multi-target Dockerfile with shared base and language-specific stages:
 
-```mermaid
-%%{init: {"themeVariables": {"fontSize": "9pt"}, "flowchart": {"htmlLabels": false, "useMaxWidth": false}}}%%
-flowchart TB
-    Base["base stage<br/><i>Debian bookworm-slim,<br/>arm64</i>"] --> Python["python stage"]
-    Base --> Golang["golang stage"]
+- **Base** = Debian bookworm-slim (arm64) + Claude Code, git, gh, jq, ripgrep, fd, fzf, uv, openssh-client. Non-root `sandbox` user.
+- **Python** (`claudecode-python`) = Python 3.14 via uv
+- **Go** (`claudecode-golang`) = Go 1.26 + gopls, goimports, golangci-lint, gotestsum, govulncheck, delve
 
-    subgraph python_img["claudecode-python"]
-        P1["Python via uv"]
-    end
-
-    subgraph golang_img["claudecode-golang"]
-        G1["Go + gopls, goimports"]
-        G2["golangci-lint, gotestsum, govulncheck"]
-    end
-
-    Python --> python_img
-    Golang --> golang_img
-```
-
-Plain-language view:
-
-- **Base stage** = preinstalled common tools used in every image (Claude, git, gh, jq, ripgrep, fd, fzf, uv, ssh client).
-- **Python/Go stages** = add language-specific toolchains on top of that base.
-- This keeps builds faster and simpler because shared tools are defined once.
-
-**Base tooling (both images):** Claude Code (binary), git, gh, jq, ripgrep, fd, fzf, uv, openssh-client. Non-root `sandbox` user.
-
-| Image               | Build command                         |
-| ------------------- | ------------------------------------- |
-| `claudecode-python` | `./launch.sh --rebuild`               |
+| Image | Build command |
+|-------|---------------|
+| `claudecode-python` | `./launch.sh --rebuild` |
 | `claudecode-golang` | `./launch.sh --rebuild --lang golang` |
+
+## MCP Server Support
+
+Containers can connect to MCP servers via HTTP transport — no binaries baked into images:
+
+- **Remote HTTP servers** — configured in `[mcp]` section, tokens from macOS Keychain
+- **Host-side Postgres** — reached via Apple Container gateway (`192.168.64.1`)
+
+See [CONFIGURATION.md](CONFIGURATION.md#mcp---remote-mcp-servers) and [MCP in Containers](docs/mcp-in-containers.md) for setup.
 
 ## Zed ACP Mode (On Hold)
 
-> **Blocked by upstream bug in `claude-agent-acp` v0.20.1 static binary (linux-arm64).**
->
-> The ACP static binary (Bun SEA) crashes with a JavaScript TDZ error (`Cannot access 'z4' before initialization`) during `session/prompt`. The bug is in the binary's `--cli` mode — a code path used only by the static build. The Homebrew (Node.js) distribution of the same version works fine on macOS because it uses the SDK's `cli.js` module directly instead of `--cli`.
->
-> `zed-claude-acp.sh` itself is correct and ready — it's waiting for a fixed ACP binary. Track the issue at [zed-industries/claude-agent-acp](https://github.com/zed-industries/claude-agent-acp/issues).
-
-## Troubleshooting
-
-Moved to [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) to keep this README focused on setup and architecture.
+> Blocked by an upstream bug in the `claude-agent-acp` static binary (linux-arm64) — crashes with a JavaScript TDZ error (`Cannot access 'z4' before initialization`) during `session/prompt`. The Homebrew (Node.js) build works fine; only the static Bun SEA binary is affected. `zed-claude-acp.sh` is ready — waiting for a fix.

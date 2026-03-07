@@ -1,294 +1,202 @@
 # Configuration
 
-Build-time configuration lives in `container-build.toml` (tool versions, build features). Runtime configuration lives in `container-run.toml` (VM resources, Claude flags).
+Two config files: `container-build.toml` (build-time, lives with this repo) and `container-run.toml` (runtime, lives in your project).
 
 ## container-build.toml
 
-Full annotated example (current defaults):
+Tool versions and build features. Changes require `./launch.sh --rebuild`.
 
 ```toml
 [versions]
-claude_code = "latest"          # Claude Code binary — "latest" resolves at build time
-claude_agent_acp = "latest"     # ACP binary version (only if installed)
-gh = "2.87.3"                   # GitHub CLI
-fd = "10.3.0"                   # fd-find
-python = "3.14"                 # Python version (Python image only)
-go = "1.26.0"                   # Go version (Go image only)
-golangci_lint = "v2.4.0"        # golangci-lint (Go image only)
+claude_code = "latest"          # "latest" resolves at build time
+claude_agent_acp = "latest"
+gh = "2.87.3"
+fd = "10.3.0"
+python = "3.14"                 # Python image only
+go = "1.26.0"                   # Go image only
+golangci_lint = "v2.4.0"        # Go image only
 
 [builder]
-cpus = 2                        # CPUs for the builder VM
-memory = "4g"                   # Memory for the builder VM
+cpus = 2                        # Override with BUILD_CPUS env var
+memory = "4g"                   # Override with BUILD_MEMORY env var
 
 [features]
-install_claude_agent_acp = false # Install ACP binary (for Zed integration)
+install_claude_agent_acp = false # Zed ACP binary (~50MB, on hold)
 ```
 
-### [versions] — Tool Versions
+**Priority:** env vars (`BUILD_CPUS`, `BUILD_MEMORY`) > TOML `[builder]` > defaults.
 
-| Key                | Default  | Description                           |
-| ------------------ | -------- | ------------------------------------- |
-| `claude_code`      | `latest` | Claude Code binary version            |
-| `claude_agent_acp` | `latest` | ACP binary version                    |
-| `gh`               | `2.87.3` | GitHub CLI version                    |
-| `fd`               | `10.3.0` | fd-find version                       |
-| `python`           | `3.14`   | Python version (Python image only)    |
-| `go`               | `1.26.0` | Go version (Go image only)            |
-| `golangci_lint`    | `v2.4.0` | golangci-lint version (Go image only) |
+## container-run.toml
 
-Version changes require a rebuild (`./launch.sh --rebuild`).
+Per-project runtime configuration. Place in your project root. Read on every `launch.sh` run — no rebuild needed.
 
-### [builder] — Builder VM Resources
-
-| Key      | Default | Description                             |
-| -------- | ------- | --------------------------------------- |
-| `cpus`   | `2`     | CPUs allocated to the builder process   |
-| `memory` | `"4g"`  | Memory allocated to the builder process |
-
-**Resolution order** (highest priority wins):
-
-1. **Env vars:** `BUILD_CPUS`, `BUILD_MEMORY`
-2. **Build config:** `container-build.toml` `[builder]`
-3. **Defaults:** `cpus = 2`, `memory = "4g"`
-
-### [features] — Build Feature Flags
-
----
-
-#### `install_claude_agent_acp`
-
-**Default:** `false`
-
-Install the `claude-agent-acp` binary for Zed ACP integration. Adds ~50MB to the image. Requires a rebuild.
-
-> **Note:** Zed ACP mode is currently not operational. Keep this `false` unless you are actively developing the ACP integration.
-
-## container-run.toml — Per-Project Runtime Configuration
-
-Place a `container-run.toml` file in your **project directory** to configure container VM resources and Claude runtime flags. This is separate from `container-build.toml` (which lives with the Container repo) because different projects have different runtime needs.
-
-```toml
-[resources]
-memory = "4g"
-cpus = 4
-
-[claude]
-claude_simple_mode = true
-claude_skip_permissions = "yolo"
-claude_additional_system_prompt = ""
-
-[workspace]
-additional_excludes = []
-
-[credentials]
-ssh_known_hosts = ["github.com"]
-```
-
-A template is provided at `container-run.example.toml`.
+A full example is at `container-run.example.toml`.
 
 ### [resources] — VM Resources
 
-| Key      | Default | Description                                          |
-| -------- | ------- | ---------------------------------------------------- |
-| `memory` | `"2g"`  | Container VM memory (e.g., `"2g"`, `"8g"`, `"512m"`) |
-| `cpus`   | `4`     | Number of CPUs for the container VM                  |
-
-**Resolution order** (highest priority wins):
-
-1. **CLI flags:** `--memory 8g --cpus 8`
-2. **Per-project config:** `$PROJECT/container-run.toml` `[resources]`
-3. **Defaults:** `memory = "2g"`, `cpus = 4`
-
-Override the config file path with `CONTAINER_RUN_CONFIG=/path/to/config.toml`.
-
-### [claude] — Runtime Feature Flags
-
-These flags are read at every `launch.sh` invocation — no rebuild required.
-
----
-
-#### `claude_simple_mode`
-
-**Default:** `true`
-
-Sets `CLAUDE_CODE_SIMPLE=1` at container runtime. This is a Claude Code built-in flag that creates a leaner session.
-
-```mermaid
-%%{init: {"themeVariables": {"fontSize": "9pt"}, "flowchart": {"htmlLabels": false, "useMaxWidth": false}}}%%
-flowchart TD
-    Start["Container starts"] --> Check{"claude_simple_mode?"}
-
-    Check -->|true-default| Simple["CLAUDE_CODE_SIMPLE=1"]
-    Check -->|false| Full["Full features enabled"]
-
-    Simple --> S1["Disables: hooks, MCP servers,<br/>attachments, CLAUDE.md processing"]
-    Simple --> S2["Skips copying: hooks/, agents/<br/>from ~/.claude/"]
-    Simple --> S3["Still works: core Claude, settings.json,<br/>commands, skills, plugins, credentials,<br/>project .claude/, CONTAINER.md"]
-
-    Full --> F1["Copies: hooks/, agents/<br/>from ~/.claude/"]
-    Full --> F2["Requires: Python 3.12+ and uv<br/>in image (for hooks)"]
-    Full --> F3["Enables: hooks, MCP servers,<br/>attachments, CLAUDE.md files"]
+```toml
+[resources]
+memory = "4g"     # Default: "2g"
+cpus = 4          # Default: 4
 ```
 
-**Why default ON:** I am fan of using Claude Simple Mode - it is smart enough for most tasks without overkill like agents, hooks etc.
+**Priority:** CLI flags (`--memory`, `--cpus`) > TOML > defaults.
 
-**What still works in simple mode:**
+Override config path: `CONTAINER_RUN_CONFIG=/path/to/config.toml`.
 
-- All core Claude Code functionality (code reading, editing, terminal, git)
-- `settings.json`, commands, skills, plugins (copied from `~/.claude/`)
-- Project-local `.claude/` directory (copied with workspace)
-- Credentials, SSH keys, GitHub token
-- `CONTAINER.md` generation
-
-**To disable simple mode:**
-
-1. Set `claude_simple_mode = false` in `container-run.toml`
-2. Configure MCP servers in `settings.json` as needed (use http tarnsport instead of stdio)
-3. For my personal hooks add Python 3.12 (which they run on)
-
----
-
-#### `claude_skip_permissions`
-
-**Default:** `"yolo"`
-
-Controls how Claude handles permission prompts inside the container.
-
-```mermaid
-%%{init: {"themeVariables": {"fontSize": "9pt"}, "flowchart": {"htmlLabels": false, "useMaxWidth": false}}}%%
-flowchart TD
-    Start["launch.sh reads claude_skip_permissions"] --> Mode{"Value?"}
-
-    Mode -->|yolo-default| Yolo["--dangerously-skip-permissions"]
-    Mode -->|plan| Plan["--permission-mode plan<br/>--allow-dangerously-skip-permissions"]
-    Mode -->|false| Off["No special flags"]
-
-    Yolo --> Y1["Skip all prompts<br/>Full autonomy"]
-    Plan --> P1["Start in plan mode<br/>Claude can propose escalation"]
-    Off --> O1["Normal interactive prompts<br/>User confirms each action"]
-```
-
-| Value     | Claude flags                                                  | Behavior                                          |
-| --------- | ------------------------------------------------------------- | ------------------------------------------------- |
-| `"yolo"`  | `--dangerously-skip-permissions`                              | Skip all prompts, full autonomy                   |
-| `"plan"`  | `--permission-mode plan --allow-dangerously-skip-permissions` | Start in plan mode; Claude can propose escalation |
-| `"false"` | _(none)_                                                      | Normal interactive prompts                        |
-
-**Why "YOLO" here is safe:** The container is ephemeral and isolated. Changes stay inside unless you explicitly push via git. There is no risk to the host filesystem.
-
----
-
-#### `claude_additional_system_prompt`
-
-**Default:** `""` (empty — no additional prompt)
-
-Appends a project-specific system prompt after the built-in CONTAINER.md prompt. Useful for instructions that should apply to every Claude session in this project.
+### [claude] — Runtime Flags
 
 ```toml
 [claude]
-claude_additional_system_prompt = "Always use pytest for testing. Prefer pathlib over os.path."
+claude_simple_mode = true       # Default: true
+claude_skip_permissions = "yolo" # Default: "yolo"
+claude_additional_system_prompt = ""
+claude_model = "haiku"          # Default: "" (use settings.json default)
+claude_query = "Read @CONTAINER.md and verify environment"  # Default: ""
 ```
 
-The built-in prompt (`You MUST read CONTAINER.md...`) is always injected first. This value adds a second `--append-system-prompt` after it.
+#### `claude_simple_mode`
 
-### [workspace] — Workspace Copy Settings
+**Default:** `true` — sets `CLAUDE_CODE_SIMPLE=1`.
 
-| Key                   | Default | Description                                            |
-| --------------------- | ------- | ------------------------------------------------------ |
-| `additional_excludes` | `[]`    | Additional tar `--exclude` patterns for workspace copy |
+| Simple mode ON (default) | Simple mode OFF |
+|--------------------------|-----------------|
+| No hooks, MCP servers from `.mcp.json`, attachments, or CLAUDE.md processing | Full features enabled |
+| Skips copying `hooks/`, `agents/` from `~/.claude/` | Copies `hooks/`, `agents/` (needs Python 3.12+ for hooks) |
+| Still works: core Claude, settings.json, commands, skills, plugins, credentials, CONTAINER.md | Everything works |
 
-The base exclude list (`.venv`, `node_modules`, `__pycache__`, `.DS_Store`, etc.) is always applied. This setting **adds** to it — it does not replace the defaults.
+**Note:** Remote MCP servers configured in `[mcp]` section work regardless of simple mode — they're registered via `claude mcp add`, not `.mcp.json`.
+
+#### `claude_skip_permissions`
+
+**Default:** `"yolo"` — safe because the container is ephemeral and isolated.
+
+| Value | Claude flags | Behavior |
+|-------|-------------|----------|
+| `"yolo"` | `--dangerously-skip-permissions` | Full autonomy |
+| `"plan"` | `--permission-mode plan --allow-dangerously-skip-permissions` | Plan mode, can escalate |
+| `"false"` | _(none)_ | Normal interactive prompts |
+
+#### `claude_model`
+
+Override the model for container sessions. Accepts aliases (`sonnet`, `opus`, `haiku`) or full model IDs. Empty = use default from `settings.json`.
+
+#### `claude_query`
+
+Initial prompt sent to Claude at session start. Useful for environment verification on a cheap model before switching.
+
+#### `claude_additional_system_prompt`
+
+Appended after the built-in "read CONTAINER.md" prompt via `--append-system-prompt`.
+
+### [workspace] — Copy Excludes
 
 ```toml
 [workspace]
 additional_excludes = ["vendor", "dist", ".next"]
 ```
 
-Patterns are passed directly to `tar --exclude`, so they follow tar's glob syntax.
+Added to the built-in exclude list. Patterns follow `tar --exclude` glob syntax.
 
-Special case: using `"bin"` excludes only the workspace-root `./bin/` directory (not nested paths such as `src/bin` or `tools/bin`).
+Special case: `"bin"` excludes only workspace-root `./bin/` (not nested like `src/bin`).
 
-### [credentials] — Credential Settings
+### [environment] — Container Environment
 
-| Key               | Default          | Description                                         |
-| ----------------- | ---------------- | --------------------------------------------------- |
-| `ssh_known_hosts` | `["github.com"]` | Git hosts to add to `known_hosts` via `ssh-keyscan` |
+```toml
+[environment]
+timezone = "Europe/Warsaw"      # Default: Europe/Warsaw
+```
 
-By default, only `github.com` is scanned. Add hosts for GitHub Enterprise, GitLab, or other private Git servers.
+Sets `TZ` env var — affects git timestamps, logs, etc.
+
+### [credentials] — SSH Hosts
 
 ```toml
 [credentials]
-ssh_known_hosts = ["github.com", "gitlab.com", "git.internal.company.com"]
+ssh_known_hosts = ["github.com", "gitlab.com"]
 ```
 
-### When to increase resources
+Hosts added to `known_hosts` via `ssh-keyscan`. Default: `["github.com"]`.
 
-- **Go compilation:** Set `memory = "4g"` or higher — Go builds are memory-hungry
-- **Large codebases:** More CPUs speed up parallel builds and tests
-- **AI/ML workloads:** May need 8g+ for model loading
+### [postgres] — Host-Side Postgres MCP
+
+```toml
+[postgres]
+enabled = false
+url = "http://192.168.64.1:8090/mcp"
+```
+
+Connects to `postgres-mcp` running on the host Mac via the Apple Container gateway IP (`192.168.64.1`).
+
+**Host setup:**
+```bash
+postgres-mcp -t http -port 8090 -ip 0.0.0.0 -dsn "postgresql://user:pass@localhost:5432/dbname" --read-only
+```
+
+`-ip 0.0.0.0` is required — the default `localhost` is unreachable from the container. No auth needed — local-only access, MCP server enforces read-only.
+
+### [mcp] — Remote MCP Servers
+
+The host's `.mcp.json` is not copied — it has macOS-specific stdio paths. Instead, `entrypoint.sh` writes a clean `.mcp.json` and re-registers servers via `claude mcp add -s project`. Global MCP servers (from `~/.claude.json` or `settings.json`) are unaffected.
+
+```toml
+[mcp]
+enabled = false
+base_url = "https://karma.rrj.pl"
+servers = [
+    "pushover /pushover/mcp/ mcp:pushover",
+    "gemini /gemini/mcp/ mcp:gemini",
+    "time /time/mcp/ mcp:time",
+    "answer /answer/mcp/ mcp:gemini"
+]
+```
+
+Each entry: `"name path keychain-service"` — 3 fields separated by spaces.
+
+- **name** — MCP server name (should match host names — see "Server naming" below)
+- **path** — appended to `base_url` to form the full URL
+- **keychain-service** — used to look up auth token
+
+**Token resolution** (first match wins):
+1. macOS Keychain: `security find-generic-password -s "mcp:pushover" -w`
+2. Env var: `MCP_TOKEN_PUSHOVER` (uppercased name after `mcp:`)
+
+**One-time Keychain setup:**
+```bash
+security add-generic-password -s "mcp:pushover" -a "$USER" -w "TOKEN_HERE"
+security add-generic-password -s "mcp:gemini"   -a "$USER" -w "TOKEN_HERE"
+```
+
+Servers sharing a token reference the same keychain service (e.g., `answer` and `gemini` both use `mcp:gemini`).
+
+**Server naming:** Use the same names as on the host (`pushover`, not `pushover-remote`). Claude derives tool namespaces from server names — `pushover` gives `mcp__pushover__*` tools. If your host's `settings.local.json` already pre-approves these tools, the same approvals carry over into the container automatically. Otherwise you'd have to re-approve every tool on each container run.
 
 ## CONTAINER.md Templates
 
-At startup, `entrypoint.sh` renders a `CONTAINER.md` file from templates in the `templates/` directory. This file tells Claude about the container environment (Linux arm64, available tools, language-specific guidance).
+At startup, `entrypoint.sh` renders `CONTAINER.md` from templates telling Claude about the container environment.
 
-### Template files
-
-| Template                             | Used when                       |
-| ------------------------------------ | ------------------------------- |
-| `templates/CONTAINER.python.md.tmpl` | Python image (default)          |
-| `templates/CONTAINER.golang.md.tmpl` | Go image (when `go` is in PATH) |
+| Template | Used when |
+|----------|-----------|
+| `templates/CONTAINER.python.md.tmpl` | Python image (default) |
+| `templates/CONTAINER.golang.md.tmpl` | Go image |
 
 ### Placeholders
 
-Templates support variable substitution:
-
-| Placeholder                 | Resolved from                             |
-| --------------------------- | ----------------------------------------- |
-| `{{PYTHON_VERSION}}`        | `python3 --version`                       |
-| `{{GO_VERSION}}`            | `go version`                              |
-| `{{GOLANGCI_LINT_VERSION}}` | `golangci-lint version`                   |
-| `{{CLAUDE_VERSION}}`        | Stored version file or `claude --version` |
+`{{PYTHON_VERSION}}`, `{{GO_VERSION}}`, `{{GOLANGCI_LINT_VERSION}}`, `{{CLAUDE_VERSION}}`, `{{MCP_SERVER_LIST}}`
 
 ### Conditional blocks
 
-Templates support conditional sections using pseudo-XML:
-
 ```
-<if HAS_ACP>
-claude-agent-acp is available at /home/sandbox/.local/bin/claude-agent-acp
-</if>
-
-<if HAS_GOLANGCI_CONFIG>
-Host ~/.golangci.yml was copied to /home/sandbox/.
+<if HAS_MCP>
+MCP servers are available: {{MCP_SERVER_LIST}}
 </if>
 ```
 
-Negate with `!`:
-
-```
-<if !HAS_ACP>
-ACP is not installed.
-</if>
-```
-
-Available conditions: `HAS_ACP`, `HAS_GOLANGCI_CONFIG`.
-
-### Making Claude read CONTAINER.md
-
-To ensure Claude reads the container context, you can add this to your project's `CLAUDE.md`:
-
-```markdown
-# Container Environment
-
-@./CONTAINER.md
-```
+Available conditions: `HAS_ACP`, `HAS_GOLANGCI_CONFIG`, `HAS_MCP`. Negate with `!` prefix.
 
 ## System Prompt Injection
 
-`launch.sh` automatically appends a system prompt to each Claude session:
+`launch.sh` injects via `--append-system-prompt`:
 
-```
-You MUST read CONTAINER.md in the workspace root before doing anything else.
-```
-
-This is injected via the `--append-system-prompt` flag, ensuring Claude reads the container environment documentation regardless of whether `CLAUDE.md` references it.
+1. `"You MUST read CONTAINER.md in the workspace root before doing anything else."`
+2. `claude_additional_system_prompt` value (if configured)
