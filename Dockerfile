@@ -14,11 +14,6 @@ SHELL ["/bin/bash", "-c"]
 
 ARG FD_VERSION=10.3.0
 ARG GH_VERSION=2.87.3
-ARG CLAUDE_CODE_GCS=https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases
-ARG CLAUDE_CODE_VERSION=latest
-ARG INSTALL_CLAUDE_AGENT_ACP=0
-ARG CLAUDE_AGENT_ACP_VERSION=latest
-
 # ── System packages ──────────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -55,10 +50,40 @@ RUN curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_$
     mv /tmp/gh_${GH_VERSION}_linux_arm64/bin/gh /usr/local/bin/gh && \
     rm -rf /tmp/gh_${GH_VERSION}_linux_arm64
 
-# ── Claude Code (direct binary — no Bun/npm, no OOM) ──────────────────────
+# ── PATH + working directory ────────────────────────────────────────────────
 USER sandbox
-RUN mkdir -p /home/sandbox/.local/bin && \
-        if [[ "${CLAUDE_CODE_VERSION}" == "latest" ]]; then \
+RUN mkdir -p /home/sandbox/.local/bin /home/sandbox/.local/share
+ENV PATH=/home/sandbox/.local/bin:/home/sandbox/.cargo/bin:$PATH
+ENV TERM=xterm-256color
+WORKDIR /home/sandbox
+
+# NOTE: Claude Code, entrypoint.sh and templates are installed in each final
+# stage (python/golang), NOT here in base. This keeps base ultra-stable —
+# only system package or tool version changes bust the cache. Layers ordered
+# by change frequency: language tools (rare) → Claude Code (weekly) →
+# entrypoint.sh (dev iterations).
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# PYTHON — Python 3.14 via uv
+# ═════════════════════════════════════════════════════════════════════════════
+FROM base AS python
+
+# ── uv ────────────────────────────────────────────────────────────────────────
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+ARG PYTHON_VERSION=3.14
+RUN uv python install ${PYTHON_VERSION} && \
+    PYTHON_BIN=$(uv python find ${PYTHON_VERSION}) && \
+    ln -sf "$PYTHON_BIN" /home/sandbox/.local/bin/python3 && \
+    ln -sf "$PYTHON_BIN" /home/sandbox/.local/bin/python
+
+# ── Claude Code (changes weekly — after stable language layers) ─────────────
+ARG CLAUDE_CODE_GCS=https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases
+ARG CLAUDE_CODE_VERSION=latest
+ARG INSTALL_CLAUDE_AGENT_ACP=0
+ARG CLAUDE_AGENT_ACP_VERSION=latest
+RUN if [[ "${CLAUDE_CODE_VERSION}" == "latest" ]]; then \
             CLAUDE_VERSION=$(curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "${CLAUDE_CODE_GCS}/latest"); \
         else \
             CLAUDE_VERSION="${CLAUDE_CODE_VERSION}"; \
@@ -67,10 +92,7 @@ RUN mkdir -p /home/sandbox/.local/bin && \
     curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "${CLAUDE_CODE_GCS}/${CLAUDE_VERSION}/linux-arm64/claude" \
         -o /home/sandbox/.local/bin/claude && \
         chmod +x /home/sandbox/.local/bin/claude && \
-        mkdir -p /home/sandbox/.local/share && \
         echo "${CLAUDE_VERSION}" > /home/sandbox/.local/share/claude-version
-
-# ── claude-agent-acp binary (resolves latest from GitHub at build time) ────
 RUN if [[ "${INSTALL_CLAUDE_AGENT_ACP}" == "1" ]]; then \
             if [[ "${CLAUDE_AGENT_ACP_VERSION}" == "latest" ]]; then \
                 CLAUDE_ACP_VERSION=$(curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://api.github.com/repos/zed-industries/claude-agent-acp/releases/latest" | jq -r '.tag_name'); \
@@ -87,34 +109,13 @@ RUN if [[ "${INSTALL_CLAUDE_AGENT_ACP}" == "1" ]]; then \
             echo "Skipping claude-agent-acp installation (INSTALL_CLAUDE_AGENT_ACP=${INSTALL_CLAUDE_AGENT_ACP})."; \
         fi
 
-# ── PATH + working directory ────────────────────────────────────────────────
-ENV PATH=/home/sandbox/.local/bin:/home/sandbox/.cargo/bin:$PATH
-ENV TERM=xterm-256color
-WORKDIR /home/sandbox
-
-# ── Entrypoint ──────────────────────────────────────────────────────────────
+# ── Entrypoint (last — most frequently changed) ─────────────────────────────
 USER root
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY templates/ /opt/container-templates/
 RUN chmod +x /usr/local/bin/entrypoint.sh
 USER sandbox
-
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# PYTHON — Python 3.14 via uv
-# ═════════════════════════════════════════════════════════════════════════════
-FROM base AS python
-
-# ── uv ────────────────────────────────────────────────────────────────────────
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-
-ARG PYTHON_VERSION=3.14
-RUN uv python install ${PYTHON_VERSION} && \
-    PYTHON_BIN=$(uv python find ${PYTHON_VERSION}) && \
-    ln -sf "$PYTHON_BIN" /home/sandbox/.local/bin/python3 && \
-    ln -sf "$PYTHON_BIN" /home/sandbox/.local/bin/python
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -161,3 +162,42 @@ RUN go version && \
     gotestsum --version >/dev/null && \
     govulncheck -version >/dev/null && \
     dlv version >/dev/null
+
+# ── Claude Code (changes weekly — after stable language layers) ─────────────
+ARG CLAUDE_CODE_GCS=https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases
+ARG CLAUDE_CODE_VERSION=latest
+ARG INSTALL_CLAUDE_AGENT_ACP=0
+ARG CLAUDE_AGENT_ACP_VERSION=latest
+RUN if [[ "${CLAUDE_CODE_VERSION}" == "latest" ]]; then \
+            CLAUDE_VERSION=$(curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "${CLAUDE_CODE_GCS}/latest"); \
+        else \
+            CLAUDE_VERSION="${CLAUDE_CODE_VERSION}"; \
+        fi && \
+    echo "Downloading Claude Code v${CLAUDE_VERSION} for linux-arm64..." && \
+    curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "${CLAUDE_CODE_GCS}/${CLAUDE_VERSION}/linux-arm64/claude" \
+        -o /home/sandbox/.local/bin/claude && \
+        chmod +x /home/sandbox/.local/bin/claude && \
+        echo "${CLAUDE_VERSION}" > /home/sandbox/.local/share/claude-version
+RUN if [[ "${INSTALL_CLAUDE_AGENT_ACP}" == "1" ]]; then \
+            if [[ "${CLAUDE_AGENT_ACP_VERSION}" == "latest" ]]; then \
+                CLAUDE_ACP_VERSION=$(curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://api.github.com/repos/zed-industries/claude-agent-acp/releases/latest" | jq -r '.tag_name'); \
+            else \
+                CLAUDE_ACP_VERSION="${CLAUDE_AGENT_ACP_VERSION}"; \
+            fi; \
+            echo "Downloading claude-agent-acp ${CLAUDE_ACP_VERSION} for linux-arm64..."; \
+            curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/zed-industries/claude-agent-acp/releases/download/${CLAUDE_ACP_VERSION}/claude-agent-acp-linux-arm64.tar.gz" \
+            | tar -xz -C /tmp; \
+            mv /tmp/claude-agent-acp /home/sandbox/.local/bin/claude-agent-acp; \
+            chmod +x /home/sandbox/.local/bin/claude-agent-acp; \
+            echo "${CLAUDE_ACP_VERSION}" > /home/sandbox/.local/share/claude-agent-acp-version; \
+        else \
+            echo "Skipping claude-agent-acp installation (INSTALL_CLAUDE_AGENT_ACP=${INSTALL_CLAUDE_AGENT_ACP})."; \
+        fi
+
+# ── Entrypoint (last — most frequently changed) ─────────────────────────────
+USER root
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY templates/ /opt/container-templates/
+RUN chmod +x /usr/local/bin/entrypoint.sh
+USER sandbox
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

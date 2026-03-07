@@ -66,6 +66,16 @@ timezone = "Europe/Warsaw"
 # Default (when empty or absent): github.com only.
 ssh_known_hosts = ["github.com"]
 
+[postgres]
+# Enable Postgres MCP (HTTP) — connects to postgres-mcp running on host Mac.
+# Requires: postgres-mcp running on host:
+#   postgres-mcp -t http -port 8090 -ip 0.0.0.0 -dsn "postgresql://user:pass@localhost:5432/dbname" --read-only
+#
+# The container reaches the host via Apple Container gateway (192.168.64.1).
+# No auth needed — local-only access, MCP server enforces read-only mode.
+enabled = false
+url = "http://192.168.64.1:8090/mcp"
+
 [mcp]
 # Enable MCP servers in the container.
 # When enabled, remote MCP servers are registered via `claude mcp add --transport http`.

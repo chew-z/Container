@@ -142,9 +142,22 @@ fi
 # Always start with empty .mcp.json — host configs have broken stdio paths
 echo '{"mcpServers": {}}' > /workspace/.mcp.json
 
+_mcp_names=()
+
+# ── 3.5a Register Postgres MCP (HTTP, host-side) ────────────────────────────
+if [[ -n "${PG_MCP_URL:-}" ]]; then
+    echo "[entrypoint] Registering Postgres MCP..." >&2
+    if (cd /workspace && claude mcp add postgres --transport http "$PG_MCP_URL" \
+        -s project) > /dev/null 2>&1; then
+        echo "[entrypoint]   OK: postgres" >&2
+        _mcp_names+=("postgres")
+    else
+        echo "[entrypoint]   FAILED: postgres" >&2
+    fi
+fi
+
 if [[ -n "${MCP_SERVERS:-}" && -n "${MCP_TOKENS:-}" && -n "${MCP_BASE_URL:-}" ]]; then
     echo "[entrypoint] Registering MCP servers..." >&2
-    _mcp_names=()
     while IFS= read -r _entry; do
         [[ -z "$_entry" ]] && continue
         _name="$(echo "$_entry" | awk '{print $1}')"
@@ -168,13 +181,15 @@ if [[ -n "${MCP_SERVERS:-}" && -n "${MCP_TOKENS:-}" && -n "${MCP_BASE_URL:-}" ]]
         fi
         _mcp_names+=("$_name")
     done <<< "$MCP_SERVERS"
-    if [[ ${#_mcp_names[@]} -gt 0 ]]; then
-        HAS_MCP=true
-        MCP_SERVER_LIST=""
-        for _n in "${_mcp_names[@]}"; do
-            MCP_SERVER_LIST+="- \`$_n\`"$'\n'
-        done
-    fi
+fi
+
+# Build MCP server list for CONTAINER.md (from both postgres and HTTP servers)
+if [[ ${#_mcp_names[@]} -gt 0 ]]; then
+    HAS_MCP=true
+    MCP_SERVER_LIST=""
+    for _n in "${_mcp_names[@]}"; do
+        MCP_SERVER_LIST+="- \`$_n\`"$'\n'
+    done
 fi
 
 # ── 4. Generate CONTAINER.md ──────────────────────────────────────────────────

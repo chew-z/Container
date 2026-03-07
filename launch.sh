@@ -391,6 +391,16 @@ if [[ -f "$PROJECT_RUN_CONFIG" ]]; then
     # [environment] timezone
     CONTAINER_TZ="$(toml_get environment timezone "$PROJECT_RUN_CONFIG" || true)"
 
+    # [postgres] — host-side Postgres MCP (HTTP)
+    _pg_enabled_raw="$(toml_get postgres enabled "$PROJECT_RUN_CONFIG" || true)"
+    case "${_pg_enabled_raw,,}" in
+        true|1|yes|on) PG_ENABLED=1 ;;
+        *) PG_ENABLED=0 ;;
+    esac
+    if [[ "$PG_ENABLED" == "1" ]]; then
+        PG_MCP_URL="$(toml_get postgres url "$PROJECT_RUN_CONFIG" || true)"
+    fi
+
     # [mcp] remote MCP servers
     _mcp_enabled_raw="$(toml_get mcp enabled "$PROJECT_RUN_CONFIG" || true)"
     case "${_mcp_enabled_raw,,}" in
@@ -522,6 +532,11 @@ fi
 
 if [[ -n "$SSH_KNOWN_HOSTS" ]]; then
     RUN_ARGS+=(-e "SSH_KNOWN_HOSTS=${SSH_KNOWN_HOSTS}")
+fi
+
+if [[ "${PG_ENABLED:-0}" == "1" && -n "${PG_MCP_URL:-}" ]]; then
+    RUN_ARGS+=(-e "PG_MCP_URL=${PG_MCP_URL}")
+    echo "==> Postgres MCP: ${PG_MCP_URL}"
 fi
 
 if [[ "${MCP_ENABLED:-0}" == "1" ]]; then

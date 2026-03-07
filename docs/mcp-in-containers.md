@@ -255,57 +255,59 @@ install_answer = false  # Adds ~10MB. Requires OPENAI_API_KEY at runtime.
 | Network latency | Container → karma → OpenAI | Container → OpenAI (direct) |
 | Image size impact | None | +10MB |
 
-## Future: Postgres MCP (stdio, in-container)
+## Postgres MCP (HTTP, host-side)
 
-**Not in scope for initial implementation** — documented for future reference.
+Postgres MCP runs on the host Mac as an HTTP service. The container connects through the Apple Container gateway IP (`192.168.64.1`). This follows the same pattern as other remote MCP servers — no image rebuild needed.
 
-Postgres MCP needs to sit close to the database — remote HTTP is not viable. The binary (`go-postgres-mcp`, ~15MB) must run inside the container via stdio, connecting to the host's PostgreSQL through the container gateway.
+### Architecture
 
-### Networking
-
-Apple Container uses a static NAT network:
-- **Subnet**: `192.168.64.0/24` (fixed, built-in `default` network)
-- **Gateway**: `192.168.64.1` (always the host)
-- Multiple containers share the same network — all reach the host at `.1`
-
-### One-time Postgres configuration (host side)
-
-1. `postgresql.conf`: `listen_addresses = 'localhost,192.168.64.1'`
-2. `pg_hba.conf`: `host all all 192.168.64.0/24 scram-sha-256`
-3. Reload: `brew services restart postgresql` (or `pg_ctl reload`)
-
-This is done once and persists across all container launches.
-
-### Container implementation
-
-`container-run.toml` addition:
-```toml
-[postgres]
-enabled = false
-dsn = "postgresql://testuser:testpass@192.168.64.1:5432/testdb?sslmode=disable"
+```
+Host Mac                              Container
+┌─────────────────────────┐           ┌──────────────────────────┐
+│ postgres-mcp            │           │ Claude Code              │
+│   -t http -port 8090    │◀── HTTP ──│   mcp: postgres          │
+│   -dsn "postgresql://…" │           │   http://192.168.64.1:…  │
+│   --read-only           │           └──────────────────────────┘
+│         │               │
+│         ▼               │
+│   PostgreSQL (local)    │
+└─────────────────────────┘
 ```
 
-Binary: cross-compile from source (`/Users/rrj/Projekty/Go/src/go-postgres-mcp`):
-```bash
-GOOS=linux GOARCH=arm64 go build -o postgres-mcp-linux
-```
+### Setup
 
-Registration in `entrypoint.sh`:
-```bash
-if command -v postgres-mcp &>/dev/null && [[ -n "${PG_DSN:-}" ]]; then
-    claude mcp add postgres -- postgres-mcp -dsn "$PG_DSN" --read-only -t stdio
-fi
-```
+1. **Start postgres-mcp on the host:**
+   ```bash
+   postgres-mcp -t http -port 8090 -ip 0.0.0.0 -dsn "postgresql://user:pass@localhost:5432/dbname" --read-only
+   ```
 
-### What's needed (summary)
+2. **Enable in `container-run.toml`:**
+   ```toml
+   [postgres]
+   enabled = true
+   url = "http://192.168.64.1:8090/mcp"
+   ```
+
+3. **Launch container** — entrypoint registers the MCP server automatically.
+
+### How it works
+
+- `launch.sh` reads `[postgres]` config, passes `PG_MCP_URL` env var to the container
+- `entrypoint.sh` runs `claude mcp add postgres --transport http "$PG_MCP_URL"` if the URL is set
+- No auth needed — local-only access via container gateway, MCP server enforces read-only
+- No Dockerfile changes — no binary in the image
+
+### Files involved
 
 | File | Change |
 |------|--------|
-| `container-build.toml` | `[features] install_postgres_mcp = false` |
-| `container-run.toml` | `[postgres] enabled, dsn` |
-| `Dockerfile` | COPY pre-built linux-arm64 binary |
-| `launch.sh` | Read `[postgres]` config, pass `PG_DSN` env var |
-| `entrypoint.sh` | Register `postgres` MCP if binary + DSN present |
+| `container-run.toml` | `[postgres] enabled, url` |
+| `launch.sh` | Read `[postgres]` config, pass `PG_MCP_URL` env var |
+| `entrypoint.sh` | Register `postgres` MCP via HTTP if `PG_MCP_URL` set |
+
+### Alternative: stdio (in-container binary)
+
+If lower latency or offline use is needed, the postgres-mcp binary (`go-postgres-mcp`, ~15MB) can be baked into the image and run via stdio transport. This would require Dockerfile changes and a `PG_DSN` env var instead of `PG_MCP_URL`. The HTTP approach is preferred for simplicity.
 
 ## Future: Codex MCP (stdio, in-container)
 
