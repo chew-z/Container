@@ -195,13 +195,10 @@ fi
 # ── 3.6 Install LSP plugins (fresh — host cache has broken paths) ───────────
 if command -v go &>/dev/null; then
     _lsp_plugin="gopls-lsp@claude-plugins-official"
-    _lsp_disable="pyright-lsp@claude-plugins-official"
 elif command -v python3 &>/dev/null; then
     _lsp_plugin="pyright-lsp@claude-plugins-official"
-    _lsp_disable="gopls-lsp@claude-plugins-official"
 else
     _lsp_plugin=""
-    _lsp_disable=""
 fi
 
 if [[ -n "$_lsp_plugin" ]]; then
@@ -216,17 +213,9 @@ if [[ -n "$_lsp_plugin" ]]; then
 
     echo "[entrypoint] Installing LSP plugin: $_lsp_plugin..." >&2
     if claude plugin install "$_lsp_plugin" > /dev/null 2>&1; then
-        echo "[entrypoint]   OK: $_lsp_plugin installed" >&2
-        # Enable the installed plugin (install alone doesn't activate it)
-        claude plugin enable "$_lsp_plugin" > /dev/null 2>&1 || true
-        echo "[entrypoint]   OK: $_lsp_plugin enabled" >&2
+        echo "[entrypoint]   OK: $_lsp_plugin" >&2
     else
         echo "[entrypoint]   FAILED: $_lsp_plugin (non-fatal)" >&2
-    fi
-
-    # Disable the wrong LSP plugin (host settings.json may have both enabled)
-    if [[ -n "$_lsp_disable" ]]; then
-        claude plugin disable "$_lsp_disable" > /dev/null 2>&1 || true
     fi
 fi
 
