@@ -152,7 +152,8 @@ RUN go install golang.org/x/tools/gopls@latest && \
     go install golang.org/x/tools/cmd/goimports@latest && \
     go install gotest.tools/gotestsum@latest && \
     go install golang.org/x/vuln/cmd/govulncheck@latest && \
-    go install github.com/go-delve/delve/cmd/dlv@latest
+    go install github.com/go-delve/delve/cmd/dlv@latest && \
+    go clean -modcache -cache
 RUN go version && \
     golangci-lint version && \
     gopls version >/dev/null && \
