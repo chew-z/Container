@@ -26,3 +26,6 @@ memory = "4g"
 # Adds ~50MB to the image. Default is OFF.
 # Rebuild required when toggled.
 install_claude_agent_acp = false
+# Install godoc-mcp for Go documentation via MCP (Go containers only).
+# Default is OFF. Rebuild required when toggled.
+install_godoc_mcp = false

@@ -256,6 +256,7 @@ build_image() {
 
     local fd_version gh_version claude_code_version claude_agent_acp_version
     local python_version go_version golangci_lint_version install_acp_raw install_acp
+    local install_godoc_mcp_raw install_godoc_mcp
 
     fd_version="10.3.0"
     gh_version="2.87.3"
@@ -265,6 +266,7 @@ build_image() {
     go_version="1.26.0"
     golangci_lint_version="v2.4.0"
     install_acp="0"
+    install_godoc_mcp="0"
 
     if [[ -f "$cfg" ]]; then
         fd_version="$(toml_get versions fd "$cfg" || true)"
@@ -275,6 +277,7 @@ build_image() {
         go_version="$(toml_get versions go "$cfg" || true)"
         golangci_lint_version="$(toml_get versions golangci_lint "$cfg" || true)"
         install_acp_raw="$(toml_get features install_claude_agent_acp "$cfg" || true)"
+        install_godoc_mcp_raw="$(toml_get features install_godoc_mcp "$cfg" || true)"
 
         fd_version="${fd_version:-10.3.0}"
         gh_version="${gh_version:-2.87.3}"
@@ -287,6 +290,11 @@ build_image() {
         case "${install_acp_raw,,}" in
             true|1|yes|on) install_acp="1" ;;
             *) install_acp="0" ;;
+        esac
+
+        case "${install_godoc_mcp_raw,,}" in
+            true|1|yes|on) install_godoc_mcp="1" ;;
+            *) install_godoc_mcp="0" ;;
         esac
 
     else
@@ -335,6 +343,7 @@ build_image() {
         --build-arg "PYTHON_VERSION=$python_version" \
         --build-arg "GO_VERSION=$go_version" \
         --build-arg "GOLANGCI_LINT_VERSION=$golangci_lint_version" \
+        --build-arg "INSTALL_GODOC_MCP=$install_godoc_mcp" \
         "$TEMPLATE_DIR"
     echo "==> Build complete."
 }

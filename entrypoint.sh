@@ -183,6 +183,20 @@ if [[ -n "${MCP_SERVERS:-}" && -n "${MCP_TOKENS:-}" && -n "${MCP_BASE_URL:-}" ]]
     done <<< "$MCP_SERVERS"
 fi
 
+# ── 3.5b Register godoc-mcp (Go containers only, stdio) ──────────────────
+if command -v godoc-mcp &>/dev/null; then
+    echo "[entrypoint] Registering godoc-mcp MCP server..." >&2
+    if (cd /workspace && claude mcp add godoc \
+        -e GOPATH="$GOPATH" -e GOMODCACHE="$GOMODCACHE" \
+        -s project \
+        -- godoc-mcp) > /dev/null 2>&1; then
+        echo "[entrypoint]   OK: godoc" >&2
+        _mcp_names+=("godoc")
+    else
+        echo "[entrypoint]   FAILED: godoc (non-fatal)" >&2
+    fi
+fi
+
 # Build MCP server list for CONTAINER.md (from both postgres and HTTP servers)
 if [[ ${#_mcp_names[@]} -gt 0 ]]; then
     HAS_MCP=true
@@ -216,19 +230,6 @@ if [[ -n "$_lsp_plugin" ]]; then
         echo "[entrypoint]   OK: $_lsp_plugin" >&2
     else
         echo "[entrypoint]   FAILED: $_lsp_plugin (non-fatal)" >&2
-    fi
-fi
-
-# ── 3b. Register godoc-mcp MCP server (Go containers only) ───────────────────
-if command -v godoc-mcp &>/dev/null; then
-    echo "[entrypoint] Registering godoc-mcp MCP server..." >&2
-    if (cd /workspace && claude mcp add godoc --command godoc-mcp \
-        -e GOPATH="$GOPATH" -e GOMODCACHE="$GOMODCACHE" \
-        -s project) > /dev/null 2>&1; then
-        echo "[entrypoint]   OK: godoc" >&2
-        _mcp_names+=("godoc")
-    else
-        echo "[entrypoint]   FAILED: godoc (non-fatal)" >&2
     fi
 fi
 
