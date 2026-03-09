@@ -21,7 +21,7 @@ break things. Nothing here affects the host or any shared environment.
 
 ## Permissions
 
-This sandbox may run with permission prompts disabled or with plan-mode
+This sandbox may start with permission prompts disabled or with plan-mode
 escalation enabled. Either way, you can work freely — the environment is
 isolated and ephemeral. If you need to escalate permissions during a plan-mode
 session, inform the user and they can approve.
@@ -76,14 +76,20 @@ govulncheck ./...
 <if HAS_CODEX>
 ## Codex CLI
 
-OpenAI Codex CLI is installed and registered as an MCP server (`codex`).
-It provides code analysis tools via `codex mcp-server`. Auth uses ChatGPT OAuth
+Codex CLI is installed and registered as an MCP server (`codex`).
+It provides tools via `codex mcp-server`. Auth uses ChatGPT OAuth
 (credentials copied from host `~/.codex/`). Config: `~/.codex/config.toml`.
+
+Use `codex` for code generation, refactoring, and analysis. Treat `codex` as your pair programmer.
+When Write or Edit tools are blocked use `codex` for code generation and refactoring.
+Give `codex` detailed instructions, verify its output. Keep delta small.
 
 **IMPORTANT — Codex sandbox mode:** You are running inside an isolated Apple
 Container. Codex has its own Landlock sandbox which is redundant here and blocks
 filesystem access. When calling Codex MCP tools, you MUST always pass
-`sandbox: "danger-full-access"` and `approval-policy: "never"`. Example:
+`sandbox: "danger-full-access"` and `approval-policy: "never"`.
+
+Example:
 
 ```
 codex(prompt: "your prompt here", cwd: "/workspace", sandbox: "danger-full-access", approval-policy: "never")
@@ -94,7 +100,6 @@ Without these parameters Codex defaults to `read-only` and cannot access files.
 <if HAS_MCP>
 ## MCP Servers
 
-Remote MCP servers are registered via HTTP transport:
+Following MCP servers are registered:
 {{MCP_SERVER_LIST}}
-These servers are configured automatically. Use their tools normally.
 </if>
