@@ -125,6 +125,23 @@ A valid response means the server binary works. If it outputs non-JSON to stdout
 - Manual `printf | server` test returns valid JSON-RPC response
 - No stdout pollution (all logs must go to stderr)
 
+### Codex MCP defaults to read-only sandbox
+
+**Symptom:** Codex MCP tools fail with filesystem access errors even though `~/.codex/config.toml` has `sandbox_mode = "danger-full-access"` and `codex mcp-server` is launched with `--sandbox danger-full-access`.
+
+**Root cause:** The Codex MCP server exposes `sandbox` as a per-call parameter. Claude defaults to `sandbox: "read-only"` in its tool calls, overriding both the CLI flag and config.toml. Neither server-side setting can prevent this — the per-call parameter always wins.
+
+**Fix:** Instruct Claude via CONTAINER.md to always pass `sandbox: "danger-full-access"` and `approval-policy: "never"` in every Codex MCP call. The templates (`templates/CONTAINER.*.md.tmpl`) include this instruction in the `<if HAS_CODEX>` section.
+
+**Verification:** When Codex works, calls look like:
+```
+codex(prompt: "...", cwd: "/workspace", sandbox: "danger-full-access", approval-policy: "never")
+```
+
+If Claude omits `sandbox` or uses `read-only`, Codex will fail to read files.
+
+**Key insight:** For MCP servers that expose sandbox/permission parameters, prompt-level instructions to Claude are more reliable than server-side configuration, because Claude controls the per-call parameters.
+
 ### Postgres MCP not connecting
 
 - Verify `postgres-mcp` is running on host with `-ip 0.0.0.0` (not `localhost`)
