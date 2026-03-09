@@ -52,12 +52,13 @@ if [[ -d /mnt/in/codex_dir ]] && command -v codex &>/dev/null; then
     # Personality/instructions
     [[ -f /mnt/in/codex_dir/AGENTS.md ]] && cp -p /mnt/in/codex_dir/AGENTS.md /home/sandbox/.codex/AGENTS.md
 
-    # Generate minimal config.toml (no host-specific paths)
-    cat > /home/sandbox/.codex/config.toml << 'CODEX_CONF'
+    # Generate config.toml — no host-specific paths.
+    # Already inside an Apple Container sandbox, so Codex's own Landlock
+    # sandboxing is redundant and blocks basic operations (ls, cat) in MCP mode.
+    cat > /home/sandbox/.codex/config.toml << CODEX_CONF
 preferred_auth_method = "chatgpt"
 approval_policy = "never"
-sandbox_mode = "workspace-write"
-network_access = true
+sandbox_mode = "${CODEX_SANDBOX:-danger-full-access}"
 model = "gpt-5.3-codex-spark"
 model_reasoning_effort = "high"
 search_tool = true
@@ -167,8 +168,27 @@ echo '{"mcpServers": {}}' > /workspace/.mcp.json
 
 _mcp_names=()
 
+# ── Helper: check if a server is in the host whitelist ────────────────────
+# ENABLED_MCP_SERVERS is set by launch.sh from the host's settings.local.json:
+#   (unset) → all enabled (backward compat — no settings file on host)
+#   "*"     → enableAllProjectMcpServers: true
+#   ""      → enabledMcpjsonServers: [] — none enabled
+#   "a,b"   → only those servers enabled
+mcp_server_enabled() {
+    local name="$1"
+    # Unset → all enabled (backward compat)
+    [[ -z "${ENABLED_MCP_SERVERS+set}" ]] && return 0
+    # Explicit wildcard → all enabled
+    [[ "$ENABLED_MCP_SERVERS" == "*" ]] && return 0
+    # Empty string → none enabled
+    [[ -z "$ENABLED_MCP_SERVERS" ]] && return 1
+    # Check comma-separated list
+    [[ ",${ENABLED_MCP_SERVERS}," == *",$name,"* ]] && return 0
+    return 1
+}
+
 # ── 3.5a Register Postgres MCP (HTTP, host-side) ────────────────────────────
-if [[ -n "${PG_MCP_URL:-}" ]]; then
+if [[ -n "${PG_MCP_URL:-}" ]] && mcp_server_enabled postgres; then
     echo "[entrypoint] Registering Postgres MCP..." >&2
     if (cd /workspace && claude mcp add postgres --transport http "$PG_MCP_URL" \
         -s project) > /dev/null 2>&1; then
@@ -177,6 +197,8 @@ if [[ -n "${PG_MCP_URL:-}" ]]; then
     else
         echo "[entrypoint]   FAILED: postgres" >&2
     fi
+elif [[ -n "${PG_MCP_URL:-}" ]]; then
+    echo "[entrypoint]   SKIP: postgres (not in enabledMcpjsonServers)" >&2
 fi
 
 if [[ -n "${MCP_SERVERS:-}" && -n "${MCP_TOKENS:-}" && -n "${MCP_BASE_URL:-}" ]]; then
@@ -186,6 +208,10 @@ if [[ -n "${MCP_SERVERS:-}" && -n "${MCP_TOKENS:-}" && -n "${MCP_BASE_URL:-}" ]]
         _name="$(echo "$_entry" | awk '{print $1}')"
         _path="$(echo "$_entry" | awk '{print $2}')"
         _keychain="$(echo "$_entry" | awk '{print $3}')"
+        if ! mcp_server_enabled "$_name"; then
+            echo "[entrypoint]   SKIP: $_name (not in enabledMcpjsonServers)" >&2
+            continue
+        fi
         # Look up token from MCP_TOKENS by keychain service name
         _token=""
         if [[ -n "$_keychain" ]]; then
@@ -207,31 +233,39 @@ if [[ -n "${MCP_SERVERS:-}" && -n "${MCP_TOKENS:-}" && -n "${MCP_BASE_URL:-}" ]]
 fi
 
 # ── 3.5b Register godoc-mcp (Go containers only, stdio) ──────────────────
-if command -v godoc-mcp &>/dev/null; then
+if command -v godoc-mcp &>/dev/null && mcp_server_enabled godoc; then
     echo "[entrypoint] Registering godoc-mcp MCP server..." >&2
     if (cd /workspace && claude mcp add godoc \
         -e GOPATH="$GOPATH" -e GOMODCACHE="$GOMODCACHE" \
         -s project \
-        -- godoc-mcp) > /dev/null 2>&1; then
+        -- /home/sandbox/.local/bin/godoc-mcp) > /dev/null 2>&1; then
         echo "[entrypoint]   OK: godoc" >&2
         _mcp_names+=("godoc")
     else
         echo "[entrypoint]   FAILED: godoc (non-fatal)" >&2
     fi
+elif command -v godoc-mcp &>/dev/null; then
+    echo "[entrypoint]   SKIP: godoc (not in enabledMcpjsonServers)" >&2
 fi
 
 # ── 3.5c Register codex MCP server (stdio) ───────────────────────────────
-if command -v codex &>/dev/null; then
+if command -v codex &>/dev/null && mcp_server_enabled codex; then
     echo "[entrypoint] Registering codex MCP server..." >&2
     if (cd /workspace && claude mcp add codex \
         -s project \
-        -- codex mcp-server) > /dev/null 2>&1; then
+        -- /home/sandbox/.local/bin/codex --sandbox "${CODEX_SANDBOX:-danger-full-access}" mcp-server) > /dev/null 2>&1; then
         echo "[entrypoint]   OK: codex" >&2
         _mcp_names+=("codex")
     else
         echo "[entrypoint]   FAILED: codex (non-fatal)" >&2
     fi
+elif command -v codex &>/dev/null; then
+    echo "[entrypoint]   SKIP: codex (not in enabledMcpjsonServers)" >&2
 fi
+
+# ── 3.5d Post-registration validation ─────────────────────────────────────
+echo "[entrypoint] Registered MCP servers:" >&2
+(cd /workspace && claude mcp list 2>&1) >&2
 
 # Build MCP server list for CONTAINER.md (from both postgres and HTTP servers)
 if [[ ${#_mcp_names[@]} -gt 0 ]]; then

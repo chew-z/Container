@@ -76,6 +76,55 @@ Common causes:
 
 If server names in `[mcp] servers` don't match your host names, tool namespaces differ. For example, `pushover` gives `mcp__pushover__*` tools, but `pushover-remote` gives `mcp__pushover-remote__*` — which won't match the pre-approved rules in your host's `settings.local.json`. Use matching names so approvals carry over.
 
+### Stdio MCP servers connected but tools not appearing
+
+**Symptom:** `claude mcp list` shows the server as "connected", but its tools don't appear in Claude's tool list. HTTP servers work fine.
+
+**Root cause:** The host's `~/.claude/settings.local.json` contains a whitelist:
+
+```json
+{
+  "enableAllProjectMcpServers": false,
+  "enabledMcpjsonServers": ["answer", "pushover", "time", ...]
+}
+```
+
+When `enableAllProjectMcpServers` is `false`, only servers named in `enabledMcpjsonServers` get their tools loaded. `launch.sh` reads this whitelist and passes it to the container as `ENABLED_MCP_SERVERS`. All servers (HTTP and stdio) are only registered if they appear in the list — you control exactly which MCP servers are active.
+
+**Fix:** Add the server names to `enabledMcpjsonServers` in your host's `~/.claude/settings.local.json`:
+
+```json
+{
+  "enabledMcpjsonServers": ["answer", "pushover", "time", "codex", "godoc"]
+}
+```
+
+Or enable all project MCP servers:
+
+```json
+{
+  "enableAllProjectMcpServers": true
+}
+```
+
+**Verification:** Check entrypoint output for `SKIP: godoc (not in enabledMcpjsonServers)` — this means the server was excluded by the whitelist.
+
+**Manual stdio server test:**
+
+```bash
+printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"0.1"}}}' \
+  | /home/sandbox/.local/bin/codex mcp-server 2>/dev/null
+```
+
+A valid response means the server binary works. If it outputs non-JSON to stdout (stdout pollution), that breaks the MCP protocol.
+
+**Checklist:**
+- Server binary exists at absolute path (`which codex`, `which godoc-mcp`)
+- Server name is in `enabledMcpjsonServers` (or `enableAllProjectMcpServers: true`)
+- `claude mcp list` shows the server
+- Manual `printf | server` test returns valid JSON-RPC response
+- No stdout pollution (all logs must go to stderr)
+
 ### Postgres MCP not connecting
 
 - Verify `postgres-mcp` is running on host with `-ip 0.0.0.0` (not `localhost`)

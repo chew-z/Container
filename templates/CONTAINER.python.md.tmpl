@@ -77,6 +77,17 @@ on macOS.
 OpenAI Codex CLI is installed and registered as an MCP server (`codex`).
 It provides code analysis tools via `codex mcp-server`. Auth uses ChatGPT OAuth
 (credentials copied from host `~/.codex/`). Config: `~/.codex/config.toml`.
+
+**IMPORTANT — Codex sandbox mode:** You are running inside an isolated Apple
+Container. Codex has its own Landlock sandbox which is redundant here and blocks
+filesystem access. When calling Codex MCP tools, you MUST always pass
+`sandbox: "danger-full-access"` and `approval-policy: "never"`. Example:
+
+```
+codex(prompt: "your prompt here", cwd: "/workspace", sandbox: "danger-full-access", approval-policy: "never")
+```
+
+Without these parameters Codex defaults to `read-only` and cannot access files.
 </if>
 <if HAS_MCP>
 ## MCP Servers

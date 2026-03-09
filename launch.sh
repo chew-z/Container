@@ -403,6 +403,9 @@ if [[ -f "$PROJECT_RUN_CONFIG" ]]; then
     CLAUDE_MODEL="$(toml_get claude claude_model "$PROJECT_RUN_CONFIG" || true)"
     CLAUDE_QUERY="$(toml_get claude claude_query "$PROJECT_RUN_CONFIG" || true)"
 
+    # [codex] sandbox_mode
+    CODEX_SANDBOX="$(toml_get codex sandbox_mode "$PROJECT_RUN_CONFIG" || true)"
+
     # [workspace] additional_excludes — newline-separated list
     _excludes_lines="$(toml_get_array workspace additional_excludes "$PROJECT_RUN_CONFIG" || true)"
     if [[ -n "$_excludes_lines" ]]; then
@@ -525,6 +528,23 @@ elif [[ -n "$GH_TOKEN_RAW" ]]; then
     GH_TOKEN="$GH_TOKEN_RAW"
 fi
 
+# ── Read enabled MCP servers from host settings ──────────────────────────
+# ENABLED_MCP_SERVERS values:
+#   (unset) = no settings file found → default all enabled (backward compat)
+#   "*"     = enableAllProjectMcpServers: true → all enabled
+#   ""      = enabledMcpjsonServers: [] (empty) → none enabled
+#   "a,b"   = enabledMcpjsonServers: ["a","b"] → only those enabled
+_settings="$HOME/.claude/settings.local.json"
+if [[ -f "$_settings" ]]; then
+    _all_enabled="$(jq -r '.enableAllProjectMcpServers // false' "$_settings")"
+    if [[ "$_all_enabled" == "true" ]]; then
+        ENABLED_MCP_SERVERS="*"
+    else
+        ENABLED_MCP_SERVERS="$(jq -r '(.enabledMcpjsonServers // []) | join(",")' "$_settings")"
+    fi
+fi
+# Note: ENABLED_MCP_SERVERS is intentionally left unset when no settings file exists
+
 # ── Run container ─────────────────────────────────────────────────────────────
 echo "==> Launching Claude Code for: $PROJECT"
 echo "==> Container: $CONTAINER_NAME"
@@ -569,10 +589,19 @@ if [[ -n "$SSH_KNOWN_HOSTS" ]]; then
     RUN_ARGS+=(-e "SSH_KNOWN_HOSTS=${SSH_KNOWN_HOSTS}")
 fi
 
+# Pass ENABLED_MCP_SERVERS only when settings.local.json was read.
+# Unset inside container = all enabled (backward compat, no settings file on host).
+# Empty string = none enabled. "*" = all enabled. "a,b" = only those.
+if [[ -n "${ENABLED_MCP_SERVERS+set}" ]]; then
+    RUN_ARGS+=(-e "ENABLED_MCP_SERVERS=${ENABLED_MCP_SERVERS}")
+fi
+
 if [[ "${PG_ENABLED:-0}" == "1" && -n "${PG_MCP_URL:-}" ]]; then
     RUN_ARGS+=(-e "PG_MCP_URL=${PG_MCP_URL}")
     echo "==> Postgres MCP: ${PG_MCP_URL}"
 fi
+
+RUN_ARGS+=(-e "CODEX_SANDBOX=${CODEX_SANDBOX:-danger-full-access}")
 
 if [[ "${MCP_ENABLED:-0}" == "1" ]]; then
     if [[ -n "${MCP_TOKENS:-}" && -n "${MCP_BASE_URL:-}" && -n "${MCP_SERVERS_RAW:-}" ]]; then

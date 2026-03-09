@@ -77,6 +77,22 @@ ssh_known_hosts = ["github.com"]
 enabled = false
 url = "http://192.168.64.1:8090/mcp"
 
+[codex]
+# Sandbox mode for Codex MCP server inside the container.
+# Codex has its own Landlock sandbox — redundant inside an Apple Container.
+# Passed as --sandbox flag to `codex mcp-server` AND written to ~/.codex/config.toml.
+#
+# NOTE: The --sandbox CLI flag and config.toml set the server default, but Claude
+# can override sandbox mode per-call via MCP tool parameters (sandbox: "read-only").
+# To truly enforce this, CONTAINER.md instructs Claude to always pass
+# sandbox: "danger-full-access" in every Codex MCP call.
+#
+#   "danger-full-access" — no Landlock restrictions (recommended in container)
+#   "workspace-write"    — can write in workspace only
+#   "read-only"          — cannot write or execute (Codex needs data passed via prompt)
+#
+sandbox_mode = "danger-full-access"
+
 [mcp]
 # Enable MCP servers in the container.
 # When enabled, remote MCP servers are registered via `claude mcp add --transport http`.
