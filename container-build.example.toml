@@ -8,6 +8,7 @@
 # Pin versions for reproducible images.
 claude_code = "latest"
 claude_agent_acp = "latest"
+codex = "latest"
 gh = "2.87.3"
 fd = "10.4.0"
 python = "3.14"
@@ -29,3 +30,6 @@ install_claude_agent_acp = false
 # Install godoc-mcp for Go documentation via MCP (Go containers only).
 # Default is OFF. Rebuild required when toggled.
 install_godoc_mcp = false
+# Install OpenAI Codex CLI for code analysis via MCP.
+# Default is OFF. Rebuild required when toggled.
+install_codex = false

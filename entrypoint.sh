@@ -41,6 +41,29 @@ if [[ -d /mnt/in/claude_dir ]]; then
     fi
 fi
 
+# ── 1b. Copy ~/.codex config from host (selective) ───────────────────────
+if [[ -d /mnt/in/codex_dir ]] && command -v codex &>/dev/null; then
+    echo "[entrypoint] Copying ~/.codex config (selective)..." >&2
+    mkdir -p /home/sandbox/.codex
+
+    # Auth tokens (ChatGPT OAuth)
+    [[ -f /mnt/in/codex_dir/auth.json ]] && cp -p /mnt/in/codex_dir/auth.json /home/sandbox/.codex/auth.json
+
+    # Personality/instructions
+    [[ -f /mnt/in/codex_dir/AGENTS.md ]] && cp -p /mnt/in/codex_dir/AGENTS.md /home/sandbox/.codex/AGENTS.md
+
+    # Generate minimal config.toml (no host-specific paths)
+    cat > /home/sandbox/.codex/config.toml << 'CODEX_CONF'
+preferred_auth_method = "chatgpt"
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+network_access = true
+model = "gpt-5.3-codex-spark"
+model_reasoning_effort = "high"
+search_tool = true
+CODEX_CONF
+fi
+
 # ── 2. Copy .claude.json from host home ───────────────────────────────────────
 if [[ -f /mnt/in/home/.claude.json ]]; then
     echo "[entrypoint] Copying .claude.json..." >&2
@@ -197,6 +220,19 @@ if command -v godoc-mcp &>/dev/null; then
     fi
 fi
 
+# ── 3.5c Register codex MCP server (stdio) ───────────────────────────────
+if command -v codex &>/dev/null; then
+    echo "[entrypoint] Registering codex MCP server..." >&2
+    if (cd /workspace && claude mcp add codex \
+        -s project \
+        -- codex mcp-server) > /dev/null 2>&1; then
+        echo "[entrypoint]   OK: codex" >&2
+        _mcp_names+=("codex")
+    else
+        echo "[entrypoint]   FAILED: codex (non-fatal)" >&2
+    fi
+fi
+
 # Build MCP server list for CONTAINER.md (from both postgres and HTTP servers)
 if [[ ${#_mcp_names[@]} -gt 0 ]]; then
     HAS_MCP=true
@@ -323,6 +359,7 @@ render_template() {
 }
 
 HAS_ACP=false
+HAS_CODEX=false
 HAS_GOLANGCI_CONFIG=false
 HAS_MCP="${HAS_MCP:-false}"
 PYTHON_VERSION="$(get_python_version)"
@@ -332,6 +369,10 @@ CLAUDE_VERSION="$(get_claude_version)"
 
 if command -v claude-agent-acp &>/dev/null; then
     HAS_ACP=true
+fi
+
+if command -v codex &>/dev/null; then
+    HAS_CODEX=true
 fi
 
 if [[ -f /home/sandbox/.golangci.yml || -f /home/sandbox/.golangci.yaml ]]; then

@@ -71,6 +71,13 @@ ANTHROPIC_BASE_URL=https://api.anthropic.com
 All compiled extensions and native binaries are Linux arm64 — they will not run
 on macOS.
 
+<if HAS_CODEX>
+## Codex CLI
+
+OpenAI Codex CLI is installed and registered as an MCP server (`codex`).
+It provides code analysis tools via `codex mcp-server`. Auth uses ChatGPT OAuth
+(credentials copied from host `~/.codex/`). Config: `~/.codex/config.toml`.
+</if>
 <if HAS_MCP>
 ## MCP Servers
 

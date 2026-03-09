@@ -73,6 +73,13 @@ gotestsum -- -race ./...
 govulncheck ./...
 ```
 
+<if HAS_CODEX>
+## Codex CLI
+
+OpenAI Codex CLI is installed and registered as an MCP server (`codex`).
+It provides code analysis tools via `codex mcp-server`. Auth uses ChatGPT OAuth
+(credentials copied from host `~/.codex/`). Config: `~/.codex/config.toml`.
+</if>
 <if HAS_MCP>
 ## MCP Servers
 

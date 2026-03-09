@@ -105,7 +105,35 @@ If your host's `settings.local.json` already pre-approves tools like `mcp__pusho
 3. Inside container: ask Claude "What MCP tools do you have?"
 4. Test: send a pushover notification, use gemini search
 
+### 3. Codex CLI (`[features]` config)
+
+OpenAI Codex CLI baked into the image as a static musl binary. Registered as an MCP server via stdio transport — no HTTP proxy needed.
+
+**Build config:** `container-build.toml`
+
+```toml
+[versions]
+codex = "latest"
+
+[features]
+install_codex = true
+```
+
+**Auth flow:**
+
+1. `launch.sh` mounts `~/.codex` from host (readonly) if it exists
+2. `entrypoint.sh` copies `auth.json` (ChatGPT OAuth tokens) and `AGENTS.md`
+3. Generates a minimal `~/.codex/config.toml` inside the container
+4. Registers via `claude mcp add codex -- codex mcp-server`
+
+**Registration:** stdio transport, project-scoped:
+
+```bash
+claude mcp add codex -s project -- codex mcp-server
+```
+
+No API key needed — Codex uses ChatGPT OAuth. Authenticate on host first (`codex auth login`), then tokens are bridged into the container.
+
 ## Future
 
-- **Codex MCP** — if Codex CLI is baked into the image, register via stdio: `claude mcp add codex -- codex mcp-server`
 - **In-container binaries** — any MCP server with a small Go/Rust binary (~10-35MB) could be baked into the image and run via stdio transport for lower latency or offline use.

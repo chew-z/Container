@@ -111,6 +111,23 @@ RUN if [[ "${INSTALL_CLAUDE_AGENT_ACP}" == "1" ]]; then \
         else \
             echo "Skipping claude-agent-acp installation (INSTALL_CLAUDE_AGENT_ACP=${INSTALL_CLAUDE_AGENT_ACP})."; \
         fi
+ARG INSTALL_CODEX=0
+ARG CODEX_VERSION=latest
+RUN if [[ "${INSTALL_CODEX}" == "1" ]]; then \
+        if [[ "${CODEX_VERSION}" == "latest" ]]; then \
+            curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \
+                "https://github.com/openai/codex/releases/latest/download/codex-aarch64-unknown-linux-musl.tar.gz" \
+            | tar -xz -C /tmp; \
+        else \
+            curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \
+                "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-aarch64-unknown-linux-musl.tar.gz" \
+            | tar -xz -C /tmp; \
+        fi; \
+        mv /tmp/codex-aarch64-unknown-linux-musl /home/sandbox/.local/bin/codex; \
+        chmod +x /home/sandbox/.local/bin/codex; \
+    else \
+        echo "Skipping Codex installation (INSTALL_CODEX=${INSTALL_CODEX})."; \
+    fi
 
 # ── Entrypoint (last — most frequently changed) ─────────────────────────────
 USER root
@@ -201,6 +218,23 @@ RUN if [[ "${INSTALL_CLAUDE_AGENT_ACP}" == "1" ]]; then \
         else \
             echo "Skipping claude-agent-acp installation (INSTALL_CLAUDE_AGENT_ACP=${INSTALL_CLAUDE_AGENT_ACP})."; \
         fi
+ARG INSTALL_CODEX=0
+ARG CODEX_VERSION=latest
+RUN if [[ "${INSTALL_CODEX}" == "1" ]]; then \
+        if [[ "${CODEX_VERSION}" == "latest" ]]; then \
+            curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \
+                "https://github.com/openai/codex/releases/latest/download/codex-aarch64-unknown-linux-musl.tar.gz" \
+            | tar -xz -C /tmp; \
+        else \
+            curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \
+                "https://github.com/openai/codex/releases/download/rust-v${CODEX_VERSION}/codex-aarch64-unknown-linux-musl.tar.gz" \
+            | tar -xz -C /tmp; \
+        fi; \
+        mv /tmp/codex-aarch64-unknown-linux-musl /home/sandbox/.local/bin/codex; \
+        chmod +x /home/sandbox/.local/bin/codex; \
+    else \
+        echo "Skipping Codex installation (INSTALL_CODEX=${INSTALL_CODEX})."; \
+    fi
 
 # ── Entrypoint (last — most frequently changed) ─────────────────────────────
 USER root
