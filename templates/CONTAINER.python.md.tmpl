@@ -95,6 +95,13 @@ codex(prompt: "your prompt here", cwd: "/workspace", sandbox: "danger-full-acces
 
 Without these parameters Codex defaults to `read-only` and cannot access files.
 </if>
+<if HAS_TALK>
+## TALK
+
+- When User says `Talk to me Claude` or something similiar you MUST use `Talk` MCP server to communicate with User.
+- Be brief. Give user only the gist of it via `Talk`
+- After user says `Be quiet, Claude` or `Shut up Claude` or similiar never use `Talk` unless user encourages speech again by using phrase `Talk to me Claude` or similiar
+</if>
 <if HAS_MCP>
 ## MCP Servers
 

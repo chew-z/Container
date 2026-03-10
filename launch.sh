@@ -476,6 +476,32 @@ if [[ -f "$PROJECT_RUN_CONFIG" ]]; then
         done
         unset _token_cache
     fi
+
+    # [hooks] — Claude-hooks webhook integration
+    _hooks_enabled_raw="$(toml_get hooks enabled "$PROJECT_RUN_CONFIG" || true)"
+    case "${_hooks_enabled_raw,,}" in
+        true|1|yes|on) HOOKS_ENABLED=1 ;;
+        *) HOOKS_ENABLED=0 ;;
+    esac
+
+    if [[ "$HOOKS_ENABLED" == "1" ]]; then
+        WEBHOOK_HOST="$(toml_get hooks host "$PROJECT_RUN_CONFIG" || true)"
+        WEBHOOK_HOST="${WEBHOOK_HOST:-192.168.64.1}"
+        WEBHOOK_PORT="$(toml_get hooks port "$PROJECT_RUN_CONFIG" || true)"
+        WEBHOOK_PORT="${WEBHOOK_PORT:-8765}"
+
+        _register_talk_raw="$(toml_get hooks register_talk_mcp "$PROJECT_RUN_CONFIG" || true)"
+        case "${_register_talk_raw,,}" in
+            false|0|no|off) HOOKS_REGISTER_TALK=0 ;;
+            *) HOOKS_REGISTER_TALK=1 ;;  # default: true
+        esac
+    fi
+fi
+
+# Force non-simple mode when hooks are enabled (hooks require it)
+if [[ "${HOOKS_ENABLED:-0}" == "1" && "$CLAUDE_SIMPLE_MODE" == "1" ]]; then
+    echo "==> Hooks enabled: forcing non-simple mode" >&2
+    CLAUDE_SIMPLE_MODE="0"
 fi
 
 # Defaults (CLI flags > container-run.toml > defaults)
@@ -612,6 +638,14 @@ if [[ "${MCP_ENABLED:-0}" == "1" ]]; then
     else
         echo "WARNING: MCP enabled but missing vars — TOKENS=${MCP_TOKENS:+set}, BASE_URL=${MCP_BASE_URL:+set}, SERVERS=${MCP_SERVERS_RAW:+set}" >&2
     fi
+fi
+
+if [[ "${HOOKS_ENABLED:-0}" == "1" ]]; then
+    RUN_ARGS+=(-e "WEBHOOK_HOST=${WEBHOOK_HOST}")
+    RUN_ARGS+=(-e "WEBHOOK_PORT=${WEBHOOK_PORT}")
+    RUN_ARGS+=(-e "HOOKS_ENABLED=1")
+    RUN_ARGS+=(-e "HOOKS_REGISTER_TALK=${HOOKS_REGISTER_TALK}")
+    echo "==> Hooks: ${WEBHOOK_HOST}:${WEBHOOK_PORT} (talk_mcp=${HOOKS_REGISTER_TALK})"
 fi
 
 RUN_ARGS+=("$IMAGE" "${EXTRA_CLAUDE_ARGS[@]+"${EXTRA_CLAUDE_ARGS[@]}"}")

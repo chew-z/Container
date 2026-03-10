@@ -41,6 +41,29 @@ if [[ -d /mnt/in/claude_dir ]]; then
     fi
 fi
 
+# Rewrite webhook URLs in settings.json for container access.
+# HTTP hook URLs use literal IPs (Claude Code doesn't interpolate env vars).
+# Replace 127.0.0.1:{port} and localhost:{port} with WEBHOOK_HOST:{port}.
+rewrite_webhook_urls() {
+    local file="$1"
+    local host="${WEBHOOK_HOST:-}"
+    local port="${WEBHOOK_PORT:-8765}"
+    [[ -z "$host" || ! -f "$file" ]] && return 0
+    sed -i \
+        -e "s|http://127\.0\.0\.1:${port}|http://${host}:${port}|g" \
+        -e "s|http://localhost:${port}|http://${host}:${port}|g" \
+        "$file"
+}
+
+if [[ "${HOOKS_ENABLED:-0}" == "1" ]]; then
+    for _sf in /home/sandbox/.claude/settings.json /home/sandbox/.claude/settings.local.json; do
+        if [[ -f "$_sf" ]]; then
+            rewrite_webhook_urls "$_sf"
+            echo "[entrypoint] Rewrote webhook URLs: $_sf" >&2
+        fi
+    done
+fi
+
 # ── 1b. Copy ~/.codex config from host (selective) ───────────────────────
 if [[ -d /mnt/in/codex_dir ]] && command -v codex &>/dev/null; then
     echo "[entrypoint] Copying ~/.codex config (selective)..." >&2
@@ -162,6 +185,11 @@ if [[ "${SANDBOX_COPY_MODE:-0}" == "1" ]]; then
     tar -C /mnt/in/workspace "${EXCLUDE_ARGS[@]}" -cf - . | tar -C /workspace -xf -
 fi
 
+if [[ "${HOOKS_ENABLED:-0}" == "1" && -f /workspace/.claude/settings.json ]]; then
+    rewrite_webhook_urls /workspace/.claude/settings.json
+    echo "[entrypoint] Rewrote webhook URLs: .claude/settings.json" >&2
+fi
+
 # ── 3.5 Register MCP servers ─────────────────────────────────────────────────
 # Always start with empty .mcp.json — host configs have broken stdio paths
 echo '{"mcpServers": {}}' > /workspace/.mcp.json
@@ -261,6 +289,21 @@ if command -v codex &>/dev/null && mcp_server_enabled codex; then
     fi
 elif command -v codex &>/dev/null; then
     echo "[entrypoint]   SKIP: codex (not in enabledMcpjsonServers)" >&2
+fi
+
+# ── 3.5e Register Talk MCP (HTTP, host webhook server) ────────────────────
+if [[ "${HOOKS_ENABLED:-0}" == "1" && "${HOOKS_REGISTER_TALK:-0}" == "1" ]] && mcp_server_enabled talk; then
+    _talk_url="http://${WEBHOOK_HOST}:${WEBHOOK_PORT}/mcp/"
+    echo "[entrypoint] Registering Talk MCP at ${_talk_url}..." >&2
+    if (cd /workspace && claude mcp add --transport http talk "$_talk_url" \
+        -s project) > /dev/null 2>&1; then
+        echo "[entrypoint]   OK: talk" >&2
+        _mcp_names+=("talk")
+    else
+        echo "[entrypoint]   FAILED: talk" >&2
+    fi
+elif [[ "${HOOKS_ENABLED:-0}" == "1" && "${HOOKS_REGISTER_TALK:-0}" == "1" ]]; then
+    echo "[entrypoint]   SKIP: talk (not in enabledMcpjsonServers)" >&2
 fi
 
 # ── 3.5d Post-registration validation ─────────────────────────────────────
@@ -387,6 +430,8 @@ render_template() {
             line="${line//\{\{GOLANGCI_LINT_VERSION\}\}/${GOLANGCI_LINT_VERSION:-unknown}}"
             line="${line//\{\{CLAUDE_VERSION\}\}/${CLAUDE_VERSION:-unknown}}"
             line="${line//\{\{MCP_SERVER_LIST\}\}/${MCP_SERVER_LIST:-}}"
+            line="${line//\{\{WEBHOOK_HOST\}\}/${WEBHOOK_HOST:-}}"
+            line="${line//\{\{WEBHOOK_PORT\}\}/${WEBHOOK_PORT:-}}"
             printf '%s\n' "$line"
         fi
     done < "$template_path" > "$output_path"
@@ -394,8 +439,13 @@ render_template() {
 
 HAS_ACP=false
 HAS_CODEX=false
+HAS_TALK=false
 HAS_GOLANGCI_CONFIG=false
 HAS_MCP="${HAS_MCP:-false}"
+
+if [[ "${HOOKS_ENABLED:-0}" == "1" && "${HOOKS_REGISTER_TALK:-0}" == "1" ]]; then
+    HAS_TALK=true
+fi
 PYTHON_VERSION="$(get_python_version)"
 GO_VERSION="$(get_go_version)"
 GOLANGCI_LINT_VERSION="$(get_golangci_lint_version)"

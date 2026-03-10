@@ -93,6 +93,29 @@ url = "http://192.168.64.1:8090/mcp"
 #
 sandbox_mode = "danger-full-access"
 
+[hooks]
+# Enable Claude-hooks webhook integration.
+# When enabled, forces non-simple mode (hooks require it), sets WEBHOOK_HOST
+# in the container, and rewrites HTTP hook URLs in settings.json from
+# localhost/127.0.0.1 to the gateway IP.
+#
+# Prerequisites:
+#   1. Webhook server running on host: curl http://localhost:8765/health
+#   2. Hooks deployed on host (~/.claude/hooks/ and .claude/hooks/)
+enabled = false
+
+# IP/hostname the container uses to reach the host's webhook server.
+# Uses Apple Container gateway IP — same as Postgres MCP.
+# The webhook server must bind to 0.0.0.0 (default) for this to work.
+host = "192.168.64.1"
+
+# Port the webhook server listens on.
+port = 8765
+
+# Register the Talk MCP server (HTTP transport) from the webhook server.
+# Endpoint: http://{host}:{port}/mcp/
+register_talk_mcp = true
+
 [mcp]
 # Enable MCP servers in the container.
 # When enabled, remote MCP servers are registered via `claude mcp add --transport http`.
