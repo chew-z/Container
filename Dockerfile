@@ -188,6 +188,14 @@ RUN go version && \
     dlv version >/dev/null && \
     if [[ "${INSTALL_GODOC_MCP}" == "1" ]]; then command -v godoc-mcp; fi
 
+# ── uv + Python (needed for hooks: skill-forced-eval, context save/restore) ──
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ARG PYTHON_VERSION=3.14
+RUN uv python install ${PYTHON_VERSION} && \
+    PYTHON_BIN=$(uv python find ${PYTHON_VERSION}) && \
+    ln -sf "$PYTHON_BIN" /home/sandbox/.local/bin/python3 && \
+    ln -sf "$PYTHON_BIN" /home/sandbox/.local/bin/python
+
 # ── Claude Code (changes weekly — after stable language layers) ─────────────
 ARG CLAUDE_CODE_GCS=https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases
 ARG CLAUDE_CODE_VERSION=latest
