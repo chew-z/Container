@@ -2,7 +2,15 @@
 # cleanup.sh — manage all Claude Code containers, images, and builder cache
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_src="${BASH_SOURCE[0]}"
+while [[ -L "$_src" ]]; do
+    _dir="$(cd "$(dirname "$_src")" && pwd)"
+    _src="$(readlink "$_src")"
+    [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+SCRIPT_DIR="$(cd "$(dirname "$_src")" && pwd)"
+
+GLOBAL_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/container"
 
 # Container prefixes managed by this toolkit
 PREFIXES=("claude-" "zed-")
@@ -219,7 +227,14 @@ cmd_builder_clear_cache() {
 
 cmd_builder_restart() {
     cmd_builder_clear_cache
-    local cfg="${SCRIPT_DIR}/container-build.toml"
+    local cfg
+    if [[ -n "${CONTAINER_BUILD_CONFIG:-}" ]]; then
+        cfg="$CONTAINER_BUILD_CONFIG"
+    elif [[ -f "$GLOBAL_CONFIG_DIR/container-build.toml" ]]; then
+        cfg="$GLOBAL_CONFIG_DIR/container-build.toml"
+    else
+        cfg="$SCRIPT_DIR/container-build.toml"
+    fi
     local build_cpus=2 build_memory="4g"
     if [[ -f "$cfg" ]]; then
         local _cpus _mem

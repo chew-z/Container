@@ -56,7 +56,7 @@ BUILD_CPUS=4 BUILD_MEMORY=8g ./launch.sh --rebuild
 | `--cpus N` | Container VM CPUs. Overrides config |
 | `--rw` | Mount workspace read-write (no isolation) |
 | `--update-claude` | Allow Claude to auto-update inside the container |
-| `--config PATH` | Build config path (default: `./container-build.toml`) |
+| `--config PATH` | Build config path (overrides layered resolution) |
 | `-- ARGS...` | Pass remaining arguments to claude |
 
 ### Environment Variables
@@ -66,8 +66,8 @@ BUILD_CPUS=4 BUILD_MEMORY=8g ./launch.sh --rebuild
 | `CONTAINER_LANG` | `python` | Language target |
 | `BUILD_CPUS` | `2` | CPUs for image builder |
 | `BUILD_MEMORY` | `4g` | Memory for image builder |
-| `CONTAINER_BUILD_CONFIG` | `./container-build.toml` | Build config path |
-| `CONTAINER_RUN_CONFIG` | `$PROJECT/container-run.toml` | Runtime config path |
+| `CONTAINER_BUILD_CONFIG` | _(resolved)_ | Build config path override |
+| `CONTAINER_RUN_CONFIG` | _(resolved)_ | Runtime config path override |
 
 ## Workspace Isolation
 

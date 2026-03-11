@@ -1,6 +1,32 @@
 # Configuration
 
-Two config files: `container-build.toml` (build-time, lives with this repo) and `container-run.toml` (runtime, lives in your project).
+Two config files: `container-build.toml` (build-time) and `container-run.toml` (runtime). Both use **layered resolution** — one file wins entirely, no merging.
+
+## Config Resolution
+
+Both configs follow the same lookup order (first existing file wins):
+
+| Priority | Build config | Run config |
+|----------|-------------|------------|
+| 1. Env var | `CONTAINER_BUILD_CONFIG` | `CONTAINER_RUN_CONFIG` |
+| 2. Project-local | `$PROJECT/container-build.toml` | `$PROJECT/container-run.toml` |
+| 3. Global | `~/.config/container/container-build.toml` | `~/.config/container/container-run.toml` |
+| 4. Repo fallback | `$SCRIPT_DIR/container-build.toml` | _(none)_ |
+
+The `--config` CLI flag overrides build config resolution entirely.
+
+Active config paths are printed at startup:
+```
+==> Build config: /Users/you/.config/container/container-build.toml
+==> Run config: /Users/you/project/container-run.toml
+```
+
+**Global config setup:**
+```bash
+mkdir -p ~/.config/container
+cp container-build.toml ~/.config/container/
+cp container-run.example.toml ~/.config/container/container-run.toml
+```
 
 ## container-build.toml
 
@@ -28,7 +54,7 @@ install_claude_agent_acp = false # Zed ACP binary (~50MB, on hold)
 
 ## container-run.toml
 
-Per-project runtime configuration. Place in your project root. Read on every `launch.sh` run — no rebuild needed.
+Runtime configuration. Place in your project root (takes priority) or `~/.config/container/` (global default). Read on every `launch.sh` run — no rebuild needed.
 
 A full example is at `container-run.example.toml`.
 
@@ -65,7 +91,7 @@ cpus = 4          # Default: 4
 
 **Priority:** CLI flags (`--memory`, `--cpus`) > TOML > defaults.
 
-Override config path: `CONTAINER_RUN_CONFIG=/path/to/config.toml`.
+Override config path: `CONTAINER_RUN_CONFIG=/path/to/config.toml` (see [Config Resolution](#config-resolution)).
 
 ### [claude] — Runtime Flags
 

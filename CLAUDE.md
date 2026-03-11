@@ -23,11 +23,17 @@ Builds ephemeral arm64 containers with full tooling, credential bridging, and wo
 - **Simple mode** (`CLAUDE_CODE_SIMPLE=1`): skips hooks, agents, session memory; MCP via `claude mcp add` still works. Default in containers
 - **Permission modes** via `container-run.toml`: `yolo` (skip all), `plan`, or `off`
 - **Credentials:** OAuth from macOS Keychain, gh token, SSH keys — all bridged automatically
+- **Symlink-safe:** `launch.sh` and `cleanup.sh` resolve symlink chains, so they work from `~/.local/bin` or similar
 
 ## Config Files
 
-- `container-build.toml` — tool versions and feature flags (build-time)
-- `container-run.toml` — runtime resources, Claude mode, workspace excludes, SSH hosts (per-project)
+Layered config resolution (first existing file wins, no merging):
+
+1. Env var override (`CONTAINER_BUILD_CONFIG` / `CONTAINER_RUN_CONFIG`)
+2. Project-local: `$PROJECT/container-build.toml` or `$PROJECT/container-run.toml`
+3. Global: `~/.config/container/container-build.toml` or `~/.config/container/container-run.toml`
+4. Repo fallback (build config only): `$SCRIPT_DIR/container-build.toml`
+
 - `container-build.example.toml` / `container-run.example.toml` — documented examples
 
 ## Tech Stack
@@ -41,6 +47,7 @@ Builds ephemeral arm64 containers with full tooling, credential bridging, and wo
 
 - `entrypoint.sh` uses a custom template engine (`<if CONDITION>...</if>` blocks + `{{VAR}}` substitution)
 - `launch.sh` resolves `latest` versions at build time for proper cache invalidation
+- `launch.sh` and `cleanup.sh` resolve symlink chains for `SCRIPT_DIR` (portable, no `realpath` dependency)
 - Container names: `claude-{project-slug}`, images: `claudecode-{lang}`
 
 ## TALK

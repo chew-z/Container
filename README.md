@@ -24,6 +24,27 @@ Claude Code runs in an ephemeral, isolated container — a strong fit for YOLO p
 ./launch.sh --rebuild --lang golang    # Go image
 ```
 
+### Global Install (Optional)
+
+Symlink scripts to run from any directory:
+
+```bash
+ln -sf ~/Projekty/Container/launch.sh ~/.local/bin/launch
+ln -sf ~/Projekty/Container/cleanup.sh ~/.local/bin/cleanup
+```
+
+Both scripts resolve symlink chains, so `SCRIPT_DIR` always points to the real Container directory.
+
+### Global Config (Optional)
+
+Place defaults in `~/.config/container/` — project-local configs take priority:
+
+```bash
+mkdir -p ~/.config/container
+cp container-build.toml ~/.config/container/
+cp container-run.example.toml ~/.config/container/container-run.toml
+```
+
 ## Documentation
 
 | Document | What's inside |

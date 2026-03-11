@@ -3,7 +3,26 @@
 set -euo pipefail
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_src="${BASH_SOURCE[0]}"
+while [[ -L "$_src" ]]; do
+    _dir="$(cd "$(dirname "$_src")" && pwd)"
+    _src="$(readlink "$_src")"
+    [[ "$_src" != /* ]] && _src="$_dir/$_src"
+done
+SCRIPT_DIR="$(cd "$(dirname "$_src")" && pwd)"
+
+GLOBAL_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/container"
+
+# Resolve config file: env override > project-local > global > repo fallback
+resolve_config() {
+    local env_override="$1" name="$2" fallback="${3:-}"
+    if [[ -n "$env_override" ]]; then echo "$env_override"
+    elif [[ -f "$PROJECT/$name" ]]; then echo "$PROJECT/$name"
+    elif [[ -f "$GLOBAL_CONFIG_DIR/$name" ]]; then echo "$GLOBAL_CONFIG_DIR/$name"
+    elif [[ -n "$fallback" && -f "$fallback" ]]; then echo "$fallback"
+    fi
+}
+
 TEMPLATE_DIR="$SCRIPT_DIR"
 PROJECT="$PWD"
 REBUILD=0
@@ -13,7 +32,7 @@ CLAUDE_AUTO_UPDATE=0
 LANG_TARGET="${CONTAINER_LANG:-python}"
 EXTRA_CLAUDE_ARGS=()
 
-CONFIG_FILE="${CONTAINER_BUILD_CONFIG:-$SCRIPT_DIR/container-build.toml}"
+CONFIG_FILE=""
 
 RUN_MEMORY=""
 RUN_CPUS=""
@@ -37,15 +56,15 @@ Options:
   --memory SIZE            Container memory (e.g., 4g, 8g). Overrides config/defaults
   --cpus N                 Container CPUs. Overrides config/defaults
   --rw                     Mount workspace read-write directly (live, no isolation)
-  --config PATH            Build config file (default: ./container-build.toml)
+  --config PATH            Build config file (overrides layered resolution)
   --                       Pass remaining arguments to claude inside the container
 
 Environment:
   CONTAINER_LANG           Language target (default: python)
   BUILD_CPUS               CPUs for builder (overrides [builder] config)
   BUILD_MEMORY             Memory for builder (overrides [builder] config)
-  CONTAINER_BUILD_CONFIG   Build config path override
-  CONTAINER_RUN_CONFIG     Per-project runtime config path override
+  CONTAINER_BUILD_CONFIG   Build config path override (skips layered resolution)
+  CONTAINER_RUN_CONFIG     Runtime config path override (skips layered resolution)
   CLAUDE_CODE_SIMPLE       Set to 1 (default via claude_simple_mode in config)
                            to disable hooks, agents, session memory, attachments,
                            and CLAUDE.md files inside the container.
@@ -227,6 +246,12 @@ fi
 # ── Resolve paths ─────────────────────────────────────────────────────────────
 PROJECT="$(cd "$PROJECT" && pwd)"
 
+# ── Resolve config files ─────────────────────────────────────────────────────
+[[ -z "$CONFIG_FILE" ]] && CONFIG_FILE="$(resolve_config "${CONTAINER_BUILD_CONFIG:-}" container-build.toml "$SCRIPT_DIR/container-build.toml")"
+PROJECT_RUN_CONFIG="$(resolve_config "${CONTAINER_RUN_CONFIG:-}" container-run.toml)"
+[[ -n "$CONFIG_FILE" ]] && echo "==> Build config: $CONFIG_FILE"
+[[ -n "$PROJECT_RUN_CONFIG" ]] && echo "==> Run config: $PROJECT_RUN_CONFIG"
+
 # ── Derive names from project basename ────────────────────────────────────────
 project_slug() {
     basename "$1" | tr -cs 'a-zA-Z0-9._-' '-' | sed 's/^-*//;s/-*$//' | tr '[:upper:]' '[:lower:]'
@@ -376,7 +401,6 @@ elif ! image_exists; then
 fi
 
 # ── Read per-project runtime config ──────────────────────────────────────────
-PROJECT_RUN_CONFIG="${CONTAINER_RUN_CONFIG:-$PROJECT/container-run.toml}"
 CLAUDE_SIMPLE_MODE="1"
 SKIP_PERMISSIONS="yolo"
 EXTRA_EXCLUDES=""
