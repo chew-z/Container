@@ -498,10 +498,12 @@ if [[ -f "$PROJECT_RUN_CONFIG" ]]; then
     fi
 fi
 
-# Force non-simple mode when hooks are enabled (hooks require it)
-if [[ "${HOOKS_ENABLED:-0}" == "1" && "$CLAUDE_SIMPLE_MODE" == "1" ]]; then
-    echo "==> Hooks enabled: forcing non-simple mode" >&2
-    CLAUDE_SIMPLE_MODE="0"
+# Always inform about simple mode status
+if [[ "$CLAUDE_SIMPLE_MODE" == "1" ]]; then
+    echo "==> Simple mode: hooks, agents, session memory, CLAUDE.md disabled" >&2
+    if [[ "${HOOKS_ENABLED:-0}" == "1" ]]; then
+        echo "==>   Hooks configured but not operational in simple mode" >&2
+    fi
 fi
 
 # Defaults (CLI flags > container-run.toml > defaults)
@@ -640,7 +642,7 @@ if [[ "${MCP_ENABLED:-0}" == "1" ]]; then
     fi
 fi
 
-if [[ "${HOOKS_ENABLED:-0}" == "1" ]]; then
+if [[ "${HOOKS_ENABLED:-0}" == "1" && "$CLAUDE_SIMPLE_MODE" != "1" ]]; then
     RUN_ARGS+=(-e "WEBHOOK_HOST=${WEBHOOK_HOST}")
     RUN_ARGS+=(-e "WEBHOOK_PORT=${WEBHOOK_PORT}")
     RUN_ARGS+=(-e "HOOKS_ENABLED=1")

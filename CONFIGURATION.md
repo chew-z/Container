@@ -32,6 +32,29 @@ Per-project runtime configuration. Place in your project root. Read on every `la
 
 A full example is at `container-run.example.toml`.
 
+### Defaults Without Config File
+
+When no `container-run.toml` exists (or `CONTAINER_RUN_CONFIG` points to a missing file), all settings use hardcoded defaults. This is the leanest configuration — simple mode ON, no hooks, no MCP, no Postgres.
+
+| Setting | Default | TOML key |
+|---|---|---|
+| `CLAUDE_SIMPLE_MODE` | `1` (ON) | `claude.claude_simple_mode` |
+| `SKIP_PERMISSIONS` | `yolo` | `claude.claude_skip_permissions` |
+| `RUN_MEMORY` | `2g` | `resources.memory` |
+| `RUN_CPUS` | `4` | `resources.cpus` |
+| `CONTAINER_TZ` | `Europe/Warsaw` | `environment.timezone` |
+| `EXTRA_EXCLUDES` | _(none)_ | `workspace.additional_excludes` |
+| `SSH_KNOWN_HOSTS` | _(none)_ | `credentials.ssh_known_hosts` |
+| `CLAUDE_ADDITIONAL_SYSTEM_PROMPT` | _(none)_ | `claude.claude_additional_system_prompt` |
+| `CLAUDE_MODEL` | _(settings.json default)_ | `claude.claude_model` |
+| `CLAUDE_QUERY` | _(no initial prompt)_ | `claude.claude_query` |
+| `CODEX_SANDBOX` | `danger-full-access` | `codex.sandbox_mode` |
+| `HOOKS_ENABLED` | `0` (OFF) | `hooks.enabled` |
+| `PG_ENABLED` | `0` (OFF) | `postgres.enabled` |
+| `MCP_ENABLED` | `0` (OFF) | `mcp.enabled` |
+
+Simple mode is the master switch — when ON, hooks are silently ignored even if `hooks.enabled = true` in the config.
+
 ### [resources] — VM Resources
 
 ```toml

@@ -95,9 +95,9 @@ sandbox_mode = "danger-full-access"
 
 [hooks]
 # Enable Claude-hooks webhook integration.
-# When enabled, forces non-simple mode (hooks require it), sets WEBHOOK_HOST
-# in the container, and rewrites HTTP hook URLs in settings.json from
-# localhost/127.0.0.1 to the gateway IP.
+# Hooks are silently ignored when simple mode is enabled (simple mode is the
+# master switch). When active, sets WEBHOOK_HOST in the container and rewrites
+# HTTP hook URLs in settings.json from localhost/127.0.0.1 to the gateway IP.
 #
 # Prerequisites:
 #   1. Webhook server running on host: curl http://localhost:8765/health
