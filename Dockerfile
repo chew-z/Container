@@ -31,11 +31,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     file \
  && rm -rf /var/lib/apt/lists/*
 
-# ── fd (upstream binary — Debian's fd-find installs as fdfind) ───────────
-RUN curl -fsSL "https://github.com/sharkdp/fd/releases/download/v${FD_VERSION}/fd-v${FD_VERSION}-aarch64-unknown-linux-gnu.tar.gz" \
-    | tar -xz -C /tmp && \
-    mv /tmp/fd-v${FD_VERSION}-aarch64-unknown-linux-gnu/fd /usr/local/bin/fd && \
-    rm -rf /tmp/fd-v${FD_VERSION}-aarch64-unknown-linux-gnu
+# ── fd (upstream .deb — Debian's fd-find installs as fdfind) ─────────────
+RUN curl -fsSL "https://github.com/sharkdp/fd/releases/download/v${FD_VERSION}/fd_${FD_VERSION}_arm64.deb" \
+    -o /tmp/fd.deb && \
+    dpkg -i /tmp/fd.deb && \
+    rm /tmp/fd.deb
 
 # ── sandbox user ─────────────────────────────────────────────────────────────
 RUN useradd -m -s /bin/bash sandbox && \
