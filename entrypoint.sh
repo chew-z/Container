@@ -292,7 +292,7 @@ elif command -v codex &>/dev/null; then
 fi
 
 # ── 3.5e Register Talk MCP (HTTP, host webhook server) ────────────────────
-if [[ "${HOOKS_ENABLED:-0}" == "1" && "${HOOKS_REGISTER_TALK:-0}" == "1" ]] && mcp_server_enabled talk; then
+if [[ "${HOOKS_REGISTER_TALK:-0}" == "1" && -n "${WEBHOOK_HOST:-}" ]] && mcp_server_enabled talk; then
     _talk_url="http://${WEBHOOK_HOST}:${WEBHOOK_PORT}/mcp/"
     echo "[entrypoint] Registering Talk MCP at ${_talk_url}..." >&2
     if (cd /workspace && claude mcp add --transport http talk "$_talk_url" \
@@ -302,7 +302,7 @@ if [[ "${HOOKS_ENABLED:-0}" == "1" && "${HOOKS_REGISTER_TALK:-0}" == "1" ]] && m
     else
         echo "[entrypoint]   FAILED: talk" >&2
     fi
-elif [[ "${HOOKS_ENABLED:-0}" == "1" && "${HOOKS_REGISTER_TALK:-0}" == "1" ]]; then
+elif [[ "${HOOKS_REGISTER_TALK:-0}" == "1" && -n "${WEBHOOK_HOST:-}" ]]; then
     echo "[entrypoint]   SKIP: talk (not in enabledMcpjsonServers)" >&2
 fi
 
@@ -443,7 +443,7 @@ HAS_TALK=false
 HAS_GOLANGCI_CONFIG=false
 HAS_MCP="${HAS_MCP:-false}"
 
-if [[ "${HOOKS_ENABLED:-0}" == "1" && "${HOOKS_REGISTER_TALK:-0}" == "1" ]]; then
+if [[ "${HOOKS_REGISTER_TALK:-0}" == "1" ]]; then
     HAS_TALK=true
 fi
 PYTHON_VERSION="$(get_python_version)"

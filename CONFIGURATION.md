@@ -53,7 +53,7 @@ When no `container-run.toml` exists (or `CONTAINER_RUN_CONFIG` points to a missi
 | `PG_ENABLED` | `0` (OFF) | `postgres.enabled` |
 | `MCP_ENABLED` | `0` (OFF) | `mcp.enabled` |
 
-Simple mode is the master switch — when ON, hooks are silently ignored even if `hooks.enabled = true` in the config.
+Simple mode is the master switch — when ON, hooks are silently ignored even if `hooks.enabled = true` in the config. **Exception:** Talk MCP (`hooks.register_talk_mcp`) works in simple mode — it's a plain HTTP MCP server that doesn't depend on the hooks system.
 
 ### [resources] — VM Resources
 
@@ -92,6 +92,7 @@ Simple mode keeps working:
 
 - Core Claude, settings.json, commands, plugins, credentials, CONTAINER.md
 - **MCP servers registered via `claude mcp add`** (our approach — works fine)
+- **Talk MCP** — registered independently of hooks when `hooks.register_talk_mcp = true`
 
 > **Note:** Anthropic docs say simple mode disables MCP servers, but in our experience servers registered via `claude mcp add` (stored in `settings.json`) work fine. This may change in future releases.
 
@@ -223,7 +224,7 @@ MCP servers are available: {{MCP_SERVER_LIST}}
 </if>
 ```
 
-Available conditions: `HAS_ACP`, `HAS_GOLANGCI_CONFIG`, `HAS_MCP`. Negate with `!` prefix.
+Available conditions: `HAS_ACP`, `HAS_CODEX`, `HAS_TALK`, `HAS_GOLANGCI_CONFIG`, `HAS_MCP`. Negate with `!` prefix.
 
 ## System Prompt Injection
 

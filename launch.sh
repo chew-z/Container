@@ -648,6 +648,12 @@ if [[ "${HOOKS_ENABLED:-0}" == "1" && "$CLAUDE_SIMPLE_MODE" != "1" ]]; then
     RUN_ARGS+=(-e "HOOKS_ENABLED=1")
     RUN_ARGS+=(-e "HOOKS_REGISTER_TALK=${HOOKS_REGISTER_TALK}")
     echo "==> Hooks: ${WEBHOOK_HOST}:${WEBHOOK_PORT} (talk_mcp=${HOOKS_REGISTER_TALK})"
+# Talk MCP only — even in simple mode
+elif [[ "${HOOKS_REGISTER_TALK:-0}" == "1" ]]; then
+    RUN_ARGS+=(-e "WEBHOOK_HOST=${WEBHOOK_HOST}")
+    RUN_ARGS+=(-e "WEBHOOK_PORT=${WEBHOOK_PORT}")
+    RUN_ARGS+=(-e "HOOKS_REGISTER_TALK=1")
+    echo "==> Talk MCP: ${WEBHOOK_HOST}:${WEBHOOK_PORT}"
 fi
 
 RUN_ARGS+=("$IMAGE" "${EXTRA_CLAUDE_ARGS[@]+"${EXTRA_CLAUDE_ARGS[@]}"}")

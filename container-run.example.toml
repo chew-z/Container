@@ -114,6 +114,7 @@ port = 8765
 
 # Register the Talk MCP server (HTTP transport) from the webhook server.
 # Endpoint: http://{host}:{port}/mcp/
+# Works even in simple mode — Talk is a plain HTTP MCP server, independent of hooks.
 register_talk_mcp = true
 
 [mcp]
