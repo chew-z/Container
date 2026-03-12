@@ -92,6 +92,22 @@ is_managed() {
     return 1
 }
 
+ensure_system_running() {
+    if container system status &>/dev/null; then
+        return 0
+    fi
+    printf "Container system service is not running. Start it now? [Y/n] "
+    read -r answer
+    if [[ "${answer,,}" =~ ^(y|yes)?$ ]]; then
+        echo "Starting container system service..."
+        container system start
+        sleep 2
+    else
+        echo "Container system service is required. Start it with: container system start"
+        exit 1
+    fi
+}
+
 get_containers_json() {
     container list --all --format json 2>/dev/null || echo "[]"
 }
@@ -263,6 +279,11 @@ cmd_disk_usage() {
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 COMMAND="${1:---list}"
+
+# Ensure service is running for all commands except --help
+if [[ "$COMMAND" != "-h" && "$COMMAND" != "--help" ]]; then
+    ensure_system_running
+fi
 
 case "$COMMAND" in
     --list|-l)
