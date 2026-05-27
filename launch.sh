@@ -565,10 +565,10 @@ else
     WORKSPACE_MOUNT="type=bind,source=${PROJECT},target=/workspace"
 fi
 
-# ── Extract OAuth credentials from macOS Keychain (full JSON blob) ────────────
+# ── Extract subscription credentials from macOS Keychain ─────────────────────
 CLAUDE_CREDS="$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null || true)"
 if [[ -z "$CLAUDE_CREDS" ]]; then
-    echo "WARNING: Could not extract credentials from Keychain." >&2
+    echo "WARNING: No subscription credentials found in Keychain." >&2
 fi
 
 # ── Extract GitHub CLI token from macOS Keychain ─────────────────────────────
@@ -621,16 +621,19 @@ fi
 
 RUN_ARGS+=(
     -e "HOME=/home/sandbox"
-    -e "CLAUDE_CREDS=${CLAUDE_CREDS}"
     -e "SANDBOX_COPY_MODE=${COPY_MODE}"
     -e "CLAUDE_AUTO_UPDATE=${CLAUDE_AUTO_UPDATE}"
-    -e "ANTHROPIC_API_KEY="
     -e "GH_TOKEN=${GH_TOKEN}"
     -e "TZ=${CONTAINER_TZ}"
 )
 
-if [[ "$CLAUDE_SIMPLE_MODE" == "1" ]]; then
-    RUN_ARGS+=(-e "CLAUDE_CODE_SIMPLE=1")
+if [[ -n "$CLAUDE_CREDS" ]]; then
+    RUN_ARGS+=(-e "CLAUDE_CREDS=${CLAUDE_CREDS}")
+else
+    RUN_ARGS+=(-e "ANTHROPIC_API_KEY=")
+    if [[ "$CLAUDE_SIMPLE_MODE" == "1" ]]; then
+        RUN_ARGS+=(-e "CLAUDE_CODE_SIMPLE=1")
+    fi
 fi
 
 if [[ -n "$EXTRA_EXCLUDES" ]]; then

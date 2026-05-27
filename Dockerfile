@@ -50,7 +50,8 @@ RUN curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_$
     mv /tmp/gh_${GH_VERSION}_linux_arm64/bin/gh /usr/local/bin/gh && \
     rm -rf /tmp/gh_${GH_VERSION}_linux_arm64
 
-# ── PATH + working directory ────────────────────────────────────────────────
+# ── Workspace dir (copy mode) + PATH ────────────────────────────────────────
+RUN mkdir -p /workspace && chown sandbox:sandbox /workspace
 USER sandbox
 RUN mkdir -p /home/sandbox/.local/bin /home/sandbox/.local/share
 ENV PATH=/home/sandbox/.local/bin:/home/sandbox/.cargo/bin:$PATH

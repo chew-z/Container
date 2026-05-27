@@ -31,7 +31,7 @@ if [[ -d /mnt/in/claude_dir ]]; then
         [[ -d /mnt/in/claude_dir/$d ]] && cp -rp "/mnt/in/claude_dir/$d" "/home/sandbox/.claude/$d"
     done
 
-    # Hooks and agents — skipped in simple mode (hooks require Python/uv)
+    # Hooks and agents — skipped in simple mode
     if [[ "${CLAUDE_CODE_SIMPLE:-0}" != "1" ]]; then
         for d in hooks agents; do
             [[ -d /mnt/in/claude_dir/$d ]] && cp -rp "/mnt/in/claude_dir/$d" "/home/sandbox/.claude/$d"
@@ -94,11 +94,13 @@ if [[ -f /mnt/in/home/.claude.json ]]; then
     cp /mnt/in/home/.claude.json /home/sandbox/.claude.json
 fi
 
-# ── 2.5 Write credentials file (Linux plaintext fallback for Keychain) ───────
+# ── 2.5 Authentication ───────────────────────────────────────────────────────
 if [[ -n "${CLAUDE_CREDS:-}" ]]; then
-    echo "[entrypoint] Writing credentials file..." >&2
+    echo "[entrypoint] Auth: subscription credentials" >&2
     echo "$CLAUDE_CREDS" > /home/sandbox/.claude/.credentials.json
     chmod 600 /home/sandbox/.claude/.credentials.json
+else
+    echo "[entrypoint] WARNING: No auth configured — /login required" >&2
 fi
 
 # ── 2.6 Copy SSH keys and git config from host ──────────────────────────────
@@ -485,5 +487,11 @@ if ! command -v claude &>/dev/null; then
     exit 1
 fi
 
-# ── 7. Exec claude with any passed arguments ─────────────────────────────────
+# ── 7. Auth diagnostic ───────────────────────────────────────────────────────
+echo "[entrypoint] Auth check:" >&2
+claude auth status 2>&1 >&2 || true
+echo "[entrypoint] ANTHROPIC_API_KEY set: ${ANTHROPIC_API_KEY:+yes}${ANTHROPIC_API_KEY:-no}" >&2
+echo "[entrypoint] ANTHROPIC_BASE_URL set: ${ANTHROPIC_BASE_URL:-no}" >&2
+
+# ── 8. Exec claude with any passed arguments ─────────────────────────────────
 exec claude "$@"
