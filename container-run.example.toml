@@ -17,9 +17,13 @@ cpus = 4
 # attachments, and CLAUDE.md files inside the container.
 # MCP servers registered via `claude mcp add` still work in simple mode.
 #
-# To disable simple mode set claude_simple_mode = false, then:
-#   - Ensure the image has uv and Python 3.12 (author's current hook preference, not a hard requirement)
-#   - MCP servers in settings.json work regardless of simple mode
+# WARNING: Simple mode is incompatible with subscription (Plan) auth.
+# Claude Code ignores Keychain credentials in simple mode and requires
+# ANTHROPIC_API_KEY instead (API usage billing). Set to false for Plan billing.
+#
+# When false (full mode):
+#   - Subscription credentials from macOS Keychain are used (Plan billing)
+#   - Hooks, agents, session memory, CLAUDE.md are active
 #   - Global hooks from ~/.claude/hooks will be copied into the container
 #
 claude_simple_mode = true
@@ -95,8 +99,8 @@ sandbox_mode = "danger-full-access"
 
 [hooks]
 # Enable Claude-hooks webhook integration.
-# Hooks are silently ignored when simple mode is enabled (simple mode is the
-# master switch). When active, sets WEBHOOK_HOST in the container and rewrites
+# Hooks require full mode (claude_simple_mode = false).
+# When active, sets WEBHOOK_HOST in the container and rewrites
 # HTTP hook URLs in settings.json from localhost/127.0.0.1 to the gateway IP.
 #
 # Prerequisites:

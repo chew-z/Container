@@ -20,9 +20,10 @@ Builds ephemeral arm64 containers with full tooling, credential bridging, and wo
 
 - **Two images:** `claudecode-python` (Python 3.14 + uv) and `claudecode-golang` (Go 1.26 + gopls + golangci-lint)
 - **Copy mode** (default): workspace is copied in; changes are ephemeral. `--rw` for live bind mount.
-- **Simple mode** (`CLAUDE_CODE_SIMPLE=1`): skips hooks, agents, session memory; MCP via `claude mcp add` still works. Default in containers
+- **Simple mode** (`CLAUDE_CODE_SIMPLE=1`): skips hooks, agents, session memory; MCP via `claude mcp add` still works. **Incompatible with subscription (Plan) auth** — requires `ANTHROPIC_API_KEY` (API billing)
+- **Full mode** (`claude_simple_mode = false`): hooks, agents, session memory, CLAUDE.md active. Required for subscription credentials (Plan billing)
 - **Permission modes** via `container-run.toml`: `yolo` (skip all), `plan`, or `off`
-- **Credentials:** OAuth from macOS Keychain, gh token, SSH keys — all bridged automatically
+- **Credentials:** Subscription credentials from macOS Keychain, gh token, SSH keys — all bridged automatically. Simple mode disables credential reading
 - **Symlink-safe:** `launch.sh` and `cleanup.sh` resolve symlink chains, so they work from `~/.local/bin` or similar
 
 ## Config Files
