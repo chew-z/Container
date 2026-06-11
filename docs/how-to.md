@@ -355,18 +355,12 @@ Networks support both IPv4 and IPv6. When creating a network without explicit su
 
 ## Configure default network subnets
 
-You can customize the default IPv4 and IPv6 subnets used for new networks using system properties.
+You can customize the default IPv4 and IPv6 subnets used for new networks via `~/.config/container/config.toml`:
 
-### Set default IPv4 subnet
-
-```bash
-container system property set network.subnet 192.168.100.1/24
-```
-
-### Set default IPv6 prefix
-
-```bash
-container system property set network.subnetv6 fd00:abcd::/64
+```toml
+[network]
+subnet = "192.168.100.0/24"
+subnetv6 = "fd00:abcd::/64"
 ```
 
 These settings apply to networks created without explicit `--subnet` or `--subnet-v6` options.
@@ -588,34 +582,30 @@ Check the VM boot logs to confirm your custom init code executed:
 [    0.129230] custom-init: === CUSTOM INIT IMAGE RUNNING ===
 ```
 
-## Configure system properties
+## Configure system settings
 
-The `container system property` subcommand manages the configuration settings for the `container` CLI and services. You can customize various aspects of container behavior, including build settings, default images, and network configuration.
+System-level settings are managed via `~/.config/container/config.toml`. All sections are optional — omitted values use built-in defaults.
 
-Use `container system property list` to show information for all available properties:
-
-```console
-% bin/container system property ls
-ID                 TYPE    VALUE                                     DESCRIPTION
-build.rosetta      Bool    true                                      Build amd64 images on arm64 using Rosetta, instead of QEMU.
-dns.domain         String  *undefined*                               If defined, the local DNS domain to use for containers with unqualified names.
-image.builder      String  ghcr.io/apple/container-builder-shim/...  The image reference for the utility container that `container build` uses.
-image.init         String  ghcr.io/apple/containerization/vminit...  The image reference for the default initial filesystem image.
-kernel.binaryPath  String  opt/kata/share/kata-containers/vmlinu...  If the kernel URL is for an archive, the archive member pathname for the kernel file.
-kernel.url         String  https://github.com/kata-containers/ka...  The URL for the kernel file to install, or the URL for an archive containing the kernel file.
-network.subnet     String  *undefined*                               Default subnet for IPv4 allocation.
-network.subnetv6   String  *undefined*                               Default IPv6 network prefix.
-```
+Available sections: `[build]`, `[container]`, `[dns]`, `[kernel]`, `[network]`, `[registry]`, `[vminit]`, and `[plugin.<id>]` for plugin-scoped config.
 
 ### Example: Disable Rosetta for builds
 
-If you want to prevent the use of Rosetta translation during container builds on Apple Silicon Macs:
-
-```bash
-container system property set build.rosetta false
+```toml
+[build]
+rosetta = false
 ```
 
-This is useful when you want to ensure builds only produce native arm64 images and avoid any x86_64 emulation.
+This ensures builds only produce native arm64 images and avoid any x86_64 emulation.
+
+### Example: Set default container resources
+
+```toml
+[container]
+cpus = 4
+memory = "2g"
+```
+
+See [container-system-config.md](https://github.com/apple/container/blob/main/docs/container-system-config.md) for the full reference.
 
 ## View system logs
 

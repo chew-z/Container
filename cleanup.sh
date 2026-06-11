@@ -130,7 +130,7 @@ get_managed_containers() {
 container_status() {
     local name="$1"
     local state
-    state="$(cached_containers_json | jq -r --arg n "$name" '.[] | select(.configuration.id == $n) | .status // "unknown"')"
+    state="$(cached_containers_json | jq -r --arg n "$name" '.[] | select(.configuration.id == $n) | .status.state // "unknown"')"
     echo "${state:-unknown}"
 }
 

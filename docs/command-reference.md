@@ -1137,120 +1137,33 @@ container system kernel set [--arch <arch>] [--binary <binary>] [--force] [--rec
 *   `--recommended`: Download and install the recommended kernel as the default (takes precedence over all other flags)
 *   `--tar <tar>`: Filesystem path or remote URL to a tar archive containing a kernel file
 
-### `container system property list (ls)`
+### System configuration (`config.toml`)
 
-Lists all available system properties with their current values, types, and descriptions. Output can be formatted as a table or JSON.
+> **Note:** The `container system property get/set/clear/list` subcommands were removed in 1.0.0.
+> System settings are now managed via `~/.config/container/config.toml`.
 
-**Usage**
+See [container-system-config.md](https://github.com/apple/container/blob/main/docs/container-system-config.md) for the full reference.
 
-```bash
-container system property list [--format <format>] [--quiet] [--debug]
-```
-
-**Options**
-
-*   `--format <format>`: Format of the output (values: json, table; default: table)
-*   `-q, --quiet`: Only output the property ID
+Available TOML sections: `[build]`, `[container]`, `[dns]`, `[kernel]`, `[network]`, `[registry]`, `[vminit]`, `[plugin.<id>]`.
 
 **Examples**
 
-```bash
-# list all properties in table format
-container system property list
+```toml
+# ~/.config/container/config.toml
 
-# get only property IDs
-container system property list --quiet
+[build]
+rosetta = false
 
-# output as JSON for scripting
-container system property list --format json
-```
+[container]
+cpus = 4
+memory = "2g"
 
-### `container system property get`
+[dns]
+domain = "mycompany.local"
 
-Retrieves the current value of a specific system property by its ID.
+[network]
+subnet = "192.168.100.0/24"
+subnetv6 = "fd00:abcd::/64"
 
-**Usage**
-
-```bash
-container system property get [--debug] <id>
-```
-
-**Arguments**
-
-*   `<id>`: The property ID
-
-**Options**
-
-No options.
-
-**Examples**
-
-```bash
-# get the default registry domain
-container system property get registry.domain
-
-# get the current DNS domain setting
-container system property get dns.domain
-```
-
-### `container system property set`
-
-Sets the value of a system property. The command validates the value based on the property type (boolean, domain name, image reference, URL, or CIDR address).
-
-**Usage**
-
-```bash
-container system property set [--debug] <id> <value>
-```
-
-**Arguments**
-
-*   `<id>`: The property ID
-*   `<value>`: The property value
-
-**Options**
-
-No options.
-
-**Examples**
-
-```bash
-# enable Rosetta for AMD64 builds on ARM64
-container system property set build.rosetta true
-
-# set a custom DNS domain
-container system property set dns.domain mycompany.local
-
-# configure a custom registry
-container system property set registry.domain registry.example.com
-
-# set a custom builder image
-container system property set image.builder myregistry.com/custom-builder:latest
-```
-
-### `container system property clear`
-
-Clears (unsets) a system property, reverting it to its default value.
-
-**Usage**
-
-```bash
-container system property clear [--debug] <id>
-```
-
-**Arguments**
-
-*   `<id>`: The property ID
-
-**Options**
-
-No options.
-
-**Examples**
-
-```bash
-# clear custom DNS domain (revert to default)
-container system property clear dns.domain
-
-# clear custom registry setting
-container system property clear registry.domain
+[registry]
+domain = "registry.example.com"
