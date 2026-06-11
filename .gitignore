@@ -1,10 +1,11 @@
 .DS_Store
 
 .env
+docs/source/
 
+.agents/
 .claude/
-.github/
-.vscode/
+.codex/
 .mcp.json
 
 container-build.toml
