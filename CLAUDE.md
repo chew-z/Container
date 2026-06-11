@@ -37,6 +37,18 @@ Layered config resolution (first existing file wins, no merging):
 
 - `container-build.example.toml` / `container-run.example.toml` — documented examples
 
+### Resource precedence (CPU / memory)
+
+```
+CLI flags (--cpus, --memory)         ← highest priority
+  └── container-run.toml [resources]
+        └── ~/.config/container/config.toml [container]   ← Apple Container system defaults
+              └── Built-in defaults (4 CPUs, 1 GiB RAM)   ← lowest priority
+```
+
+Apple Container 1.0.0 introduced `~/.config/container/config.toml` for system-wide defaults.
+Our `container-run.toml` overrides those per-project, and CLI flags override everything.
+
 ## Tech Stack
 
 - Shell (bash) — all scripts

@@ -603,6 +603,59 @@ echo "==> Container: $CONTAINER_NAME"
 echo "==> Image: $IMAGE"
 echo "==> Resources: ${RUN_MEMORY} memory, ${RUN_CPUS} CPUs"
 
+# ── Build env-file for scalar vars (keeps credentials out of process table) ──
+ENV_FILE="$(mktemp)"
+trap 'rm -f "$ENV_FILE"' EXIT
+
+cat > "$ENV_FILE" <<EOF
+HOME=/home/sandbox
+SANDBOX_COPY_MODE=${COPY_MODE}
+CLAUDE_AUTO_UPDATE=${CLAUDE_AUTO_UPDATE}
+GH_TOKEN=${GH_TOKEN}
+TZ=${CONTAINER_TZ}
+CODEX_SANDBOX=${CODEX_SANDBOX:-danger-full-access}
+EOF
+
+if [[ -n "$CLAUDE_CREDS" ]]; then
+    echo "CLAUDE_CREDS=${CLAUDE_CREDS}" >> "$ENV_FILE"
+else
+    echo "ANTHROPIC_API_KEY=" >> "$ENV_FILE"
+    if [[ "$CLAUDE_SIMPLE_MODE" == "1" ]]; then
+        echo "CLAUDE_CODE_SIMPLE=1" >> "$ENV_FILE"
+    fi
+fi
+
+if [[ "${PG_ENABLED:-0}" == "1" && -n "${PG_MCP_URL:-}" ]]; then
+    echo "PG_MCP_URL=${PG_MCP_URL}" >> "$ENV_FILE"
+    echo "==> Postgres MCP: ${PG_MCP_URL}"
+fi
+
+# ENABLED_MCP_SERVERS: pass only when settings.local.json was read.
+# Unset inside container = all enabled (backward compat, no settings file on host).
+# Empty string = none enabled. "*" = all enabled. "a,b" = only those.
+if [[ -n "${ENABLED_MCP_SERVERS+set}" ]]; then
+    echo "ENABLED_MCP_SERVERS=${ENABLED_MCP_SERVERS}" >> "$ENV_FILE"
+fi
+
+if [[ "${HOOKS_ENABLED:-0}" == "1" && "$CLAUDE_SIMPLE_MODE" != "1" ]]; then
+    cat >> "$ENV_FILE" <<EOF
+WEBHOOK_HOST=${WEBHOOK_HOST}
+WEBHOOK_PORT=${WEBHOOK_PORT}
+HOOKS_ENABLED=1
+HOOKS_REGISTER_TALK=${HOOKS_REGISTER_TALK}
+EOF
+    echo "==> Hooks: ${WEBHOOK_HOST}:${WEBHOOK_PORT} (talk_mcp=${HOOKS_REGISTER_TALK})"
+elif [[ "${HOOKS_REGISTER_TALK:-0}" == "1" ]]; then
+    cat >> "$ENV_FILE" <<EOF
+WEBHOOK_HOST=${WEBHOOK_HOST}
+WEBHOOK_PORT=${WEBHOOK_PORT}
+HOOKS_REGISTER_TALK=1
+EOF
+    echo "==> Talk MCP: ${WEBHOOK_HOST}:${WEBHOOK_PORT}"
+fi
+
+chmod 600 "$ENV_FILE"
+
 RUN_ARGS=(
     container run -it --rm
     --name "$CONTAINER_NAME"
@@ -612,6 +665,7 @@ RUN_ARGS=(
     --mount "$WORKSPACE_MOUNT"
     --mount "type=bind,source=${HOME}/.claude,target=/mnt/in/claude_dir,readonly"
     --mount "type=bind,source=${HOME},target=/mnt/in/home,readonly"
+    --env-file "$ENV_FILE"
 )
 
 # Conditionally mount ~/.codex if it exists
@@ -619,23 +673,7 @@ if [[ -d "$HOME/.codex" ]]; then
     RUN_ARGS+=(--mount "type=bind,source=$HOME/.codex,target=/mnt/in/codex_dir,readonly")
 fi
 
-RUN_ARGS+=(
-    -e "HOME=/home/sandbox"
-    -e "SANDBOX_COPY_MODE=${COPY_MODE}"
-    -e "CLAUDE_AUTO_UPDATE=${CLAUDE_AUTO_UPDATE}"
-    -e "GH_TOKEN=${GH_TOKEN}"
-    -e "TZ=${CONTAINER_TZ}"
-)
-
-if [[ -n "$CLAUDE_CREDS" ]]; then
-    RUN_ARGS+=(-e "CLAUDE_CREDS=${CLAUDE_CREDS}")
-else
-    RUN_ARGS+=(-e "ANTHROPIC_API_KEY=")
-    if [[ "$CLAUDE_SIMPLE_MODE" == "1" ]]; then
-        RUN_ARGS+=(-e "CLAUDE_CODE_SIMPLE=1")
-    fi
-fi
-
+# Multiline vars must stay as -e flags (--env-file is line-based)
 if [[ -n "$EXTRA_EXCLUDES" ]]; then
     RUN_ARGS+=(-e "EXTRA_EXCLUDES=${EXTRA_EXCLUDES}")
 fi
@@ -643,20 +681,6 @@ fi
 if [[ -n "$SSH_KNOWN_HOSTS" ]]; then
     RUN_ARGS+=(-e "SSH_KNOWN_HOSTS=${SSH_KNOWN_HOSTS}")
 fi
-
-# Pass ENABLED_MCP_SERVERS only when settings.local.json was read.
-# Unset inside container = all enabled (backward compat, no settings file on host).
-# Empty string = none enabled. "*" = all enabled. "a,b" = only those.
-if [[ -n "${ENABLED_MCP_SERVERS+set}" ]]; then
-    RUN_ARGS+=(-e "ENABLED_MCP_SERVERS=${ENABLED_MCP_SERVERS}")
-fi
-
-if [[ "${PG_ENABLED:-0}" == "1" && -n "${PG_MCP_URL:-}" ]]; then
-    RUN_ARGS+=(-e "PG_MCP_URL=${PG_MCP_URL}")
-    echo "==> Postgres MCP: ${PG_MCP_URL}"
-fi
-
-RUN_ARGS+=(-e "CODEX_SANDBOX=${CODEX_SANDBOX:-danger-full-access}")
 
 if [[ "${MCP_ENABLED:-0}" == "1" ]]; then
     if [[ -n "${MCP_TOKENS:-}" && -n "${MCP_BASE_URL:-}" && -n "${MCP_SERVERS_RAW:-}" ]]; then
@@ -667,20 +691,6 @@ if [[ "${MCP_ENABLED:-0}" == "1" ]]; then
     else
         echo "WARNING: MCP enabled but missing vars — TOKENS=${MCP_TOKENS:+set}, BASE_URL=${MCP_BASE_URL:+set}, SERVERS=${MCP_SERVERS_RAW:+set}" >&2
     fi
-fi
-
-if [[ "${HOOKS_ENABLED:-0}" == "1" && "$CLAUDE_SIMPLE_MODE" != "1" ]]; then
-    RUN_ARGS+=(-e "WEBHOOK_HOST=${WEBHOOK_HOST}")
-    RUN_ARGS+=(-e "WEBHOOK_PORT=${WEBHOOK_PORT}")
-    RUN_ARGS+=(-e "HOOKS_ENABLED=1")
-    RUN_ARGS+=(-e "HOOKS_REGISTER_TALK=${HOOKS_REGISTER_TALK}")
-    echo "==> Hooks: ${WEBHOOK_HOST}:${WEBHOOK_PORT} (talk_mcp=${HOOKS_REGISTER_TALK})"
-# Talk MCP only — even in simple mode
-elif [[ "${HOOKS_REGISTER_TALK:-0}" == "1" ]]; then
-    RUN_ARGS+=(-e "WEBHOOK_HOST=${WEBHOOK_HOST}")
-    RUN_ARGS+=(-e "WEBHOOK_PORT=${WEBHOOK_PORT}")
-    RUN_ARGS+=(-e "HOOKS_REGISTER_TALK=1")
-    echo "==> Talk MCP: ${WEBHOOK_HOST}:${WEBHOOK_PORT}"
 fi
 
 RUN_ARGS+=("$IMAGE" "${EXTRA_CLAUDE_ARGS[@]+"${EXTRA_CLAUDE_ARGS[@]}"}")
