@@ -85,8 +85,6 @@ RUN uv tool install pyright
 # ── Claude Code (changes weekly — after stable language layers) ─────────────
 ARG CLAUDE_CODE_GCS=https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases
 ARG CLAUDE_CODE_VERSION=latest
-ARG INSTALL_CLAUDE_AGENT_ACP=0
-ARG CLAUDE_AGENT_ACP_VERSION=latest
 RUN if [[ "${CLAUDE_CODE_VERSION}" == "latest" ]]; then \
             CLAUDE_VERSION=$(curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "${CLAUDE_CODE_GCS}/latest"); \
         else \
@@ -97,21 +95,6 @@ RUN if [[ "${CLAUDE_CODE_VERSION}" == "latest" ]]; then \
         -o /home/sandbox/.local/bin/claude && \
         chmod +x /home/sandbox/.local/bin/claude && \
         echo "${CLAUDE_VERSION}" > /home/sandbox/.local/share/claude-version
-RUN if [[ "${INSTALL_CLAUDE_AGENT_ACP}" == "1" ]]; then \
-            if [[ "${CLAUDE_AGENT_ACP_VERSION}" == "latest" ]]; then \
-                CLAUDE_ACP_VERSION=$(curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://api.github.com/repos/zed-industries/claude-agent-acp/releases/latest" | jq -r '.tag_name'); \
-            else \
-                CLAUDE_ACP_VERSION="${CLAUDE_AGENT_ACP_VERSION}"; \
-            fi; \
-            echo "Downloading claude-agent-acp ${CLAUDE_ACP_VERSION} for linux-arm64..."; \
-            curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/zed-industries/claude-agent-acp/releases/download/${CLAUDE_ACP_VERSION}/claude-agent-acp-linux-arm64.tar.gz" \
-            | tar -xz -C /tmp; \
-            mv /tmp/claude-agent-acp /home/sandbox/.local/bin/claude-agent-acp; \
-            chmod +x /home/sandbox/.local/bin/claude-agent-acp; \
-            echo "${CLAUDE_ACP_VERSION}" > /home/sandbox/.local/share/claude-agent-acp-version; \
-        else \
-            echo "Skipping claude-agent-acp installation (INSTALL_CLAUDE_AGENT_ACP=${INSTALL_CLAUDE_AGENT_ACP})."; \
-        fi
 ARG INSTALL_CODEX=0
 ARG CODEX_VERSION=latest
 RUN if [[ "${INSTALL_CODEX}" == "1" ]]; then \
@@ -200,8 +183,6 @@ RUN uv python install ${PYTHON_VERSION} && \
 # ── Claude Code (changes weekly — after stable language layers) ─────────────
 ARG CLAUDE_CODE_GCS=https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases
 ARG CLAUDE_CODE_VERSION=latest
-ARG INSTALL_CLAUDE_AGENT_ACP=0
-ARG CLAUDE_AGENT_ACP_VERSION=latest
 RUN if [[ "${CLAUDE_CODE_VERSION}" == "latest" ]]; then \
             CLAUDE_VERSION=$(curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "${CLAUDE_CODE_GCS}/latest"); \
         else \
@@ -212,21 +193,6 @@ RUN if [[ "${CLAUDE_CODE_VERSION}" == "latest" ]]; then \
         -o /home/sandbox/.local/bin/claude && \
         chmod +x /home/sandbox/.local/bin/claude && \
         echo "${CLAUDE_VERSION}" > /home/sandbox/.local/share/claude-version
-RUN if [[ "${INSTALL_CLAUDE_AGENT_ACP}" == "1" ]]; then \
-            if [[ "${CLAUDE_AGENT_ACP_VERSION}" == "latest" ]]; then \
-                CLAUDE_ACP_VERSION=$(curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://api.github.com/repos/zed-industries/claude-agent-acp/releases/latest" | jq -r '.tag_name'); \
-            else \
-                CLAUDE_ACP_VERSION="${CLAUDE_AGENT_ACP_VERSION}"; \
-            fi; \
-            echo "Downloading claude-agent-acp ${CLAUDE_ACP_VERSION} for linux-arm64..."; \
-            curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors "https://github.com/zed-industries/claude-agent-acp/releases/download/${CLAUDE_ACP_VERSION}/claude-agent-acp-linux-arm64.tar.gz" \
-            | tar -xz -C /tmp; \
-            mv /tmp/claude-agent-acp /home/sandbox/.local/bin/claude-agent-acp; \
-            chmod +x /home/sandbox/.local/bin/claude-agent-acp; \
-            echo "${CLAUDE_ACP_VERSION}" > /home/sandbox/.local/share/claude-agent-acp-version; \
-        else \
-            echo "Skipping claude-agent-acp installation (INSTALL_CLAUDE_AGENT_ACP=${INSTALL_CLAUDE_AGENT_ACP})."; \
-        fi
 ARG INSTALL_CODEX=0
 ARG CODEX_VERSION=latest
 RUN if [[ "${INSTALL_CODEX}" == "1" ]]; then \

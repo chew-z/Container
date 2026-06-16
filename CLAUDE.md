@@ -11,7 +11,6 @@ Builds ephemeral arm64 containers with full tooling, credential bridging, and wo
 | `entrypoint.sh`        | Container startup: copies config, creds, SSH keys, workspace; generates CONTAINER.md |
 | `launch.sh`            | Main CLI: builds image, reads config, launches interactive Claude session            |
 | `cleanup.sh`           | Container/image lifecycle management (list/stop/remove/prune)                        |
-| `zed-claude-acp.sh`    | Zed ACP integration (blocked upstream — not operational)                             |
 | `container-build.toml` | Build-time versions (Claude, Python, Go, gh, fd, etc.)                               |
 | `container-run.toml`   | Per-project runtime: resources, permissions, excludes                                |
 | `templates/*.md.tmpl`  | CONTAINER.md templates rendered at startup with env vars                             |

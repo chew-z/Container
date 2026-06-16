@@ -140,7 +140,7 @@ stateDiagram-v2
 | `container list --all` | List all containers |
 | `container stop NAME` | Stop a running container |
 | `container delete NAME` | Delete a stopped container |
-| `cleanup.sh --list` | List managed containers (claude-*, zed-*) |
+| `cleanup.sh --list` | List managed containers (claude-*) |
 | `cleanup.sh --stop` | Stop all managed containers |
 | `cleanup.sh --prune` | Stop + delete all managed containers |
 

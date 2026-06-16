@@ -35,7 +35,6 @@ Tool versions and build features. Changes require `./launch.sh --rebuild`.
 ```toml
 [versions]
 claude_code = "latest"          # "latest" resolves at build time
-claude_agent_acp = "latest"
 gh = "2.87.3"
 fd = "10.3.0"
 python = "3.14"                 # Python image only
@@ -47,7 +46,8 @@ cpus = 2                        # Override with BUILD_CPUS env var
 memory = "4g"                   # Override with BUILD_MEMORY env var
 
 [features]
-install_claude_agent_acp = false # Zed ACP binary (~50MB, on hold)
+install_godoc_mcp = true        # godoc-mcp for Go docs (Go image only)
+install_codex = true            # OpenAI Codex CLI
 ```
 
 **Priority:** env vars (`BUILD_CPUS`, `BUILD_MEMORY`) > TOML `[builder]` > defaults.
@@ -250,7 +250,7 @@ MCP servers are available: {{MCP_SERVER_LIST}}
 </if>
 ```
 
-Available conditions: `HAS_ACP`, `HAS_CODEX`, `HAS_TALK`, `HAS_GOLANGCI_CONFIG`, `HAS_MCP`. Negate with `!` prefix.
+Available conditions: `HAS_CODEX`, `HAS_TALK`, `HAS_GOLANGCI_CONFIG`, `HAS_MCP`. Negate with `!` prefix.
 
 ## System Prompt Injection
 

@@ -147,9 +147,3 @@ If Claude omits `sandbox` or uses `read-only`, Codex will fail to read files.
 - Verify `postgres-mcp` is running on host with `-ip 0.0.0.0` (not `localhost`)
 - The container reaches the host via `192.168.64.1` (Apple Container gateway)
 - Check `[postgres] enabled = true` in `container-run.toml`
-
-## Zed ACP Mode
-
-### "Query closed before response received" in Zed
-
-ACP mode is on hold due to an upstream bug. Check logs: `tail -f /tmp/zed-claude-acp.log`

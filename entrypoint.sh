@@ -3,7 +3,8 @@
 set -euo pipefail
 
 # ── Passthrough: if invoked as a non-claude command, exec it directly ─────────
-# This handles persistent containers (sleep infinity) created by zed-claude-acp.sh
+# DECISION: kept as a general debugging affordance — lets `container exec`/run
+# drop into a shell or sleep without going through the Claude bootstrap.
 case "${1:-}" in
     sleep|/bin/sleep|bash|/bin/bash|sh|/bin/sh)
         exec "$@"
@@ -439,7 +440,6 @@ render_template() {
     done < "$template_path" > "$output_path"
 }
 
-HAS_ACP=false
 HAS_CODEX=false
 HAS_TALK=false
 HAS_GOLANGCI_CONFIG=false
@@ -452,10 +452,6 @@ PYTHON_VERSION="$(get_python_version)"
 GO_VERSION="$(get_go_version)"
 GOLANGCI_LINT_VERSION="$(get_golangci_lint_version)"
 CLAUDE_VERSION="$(get_claude_version)"
-
-if command -v claude-agent-acp &>/dev/null; then
-    HAS_ACP=true
-fi
 
 if command -v codex &>/dev/null; then
     HAS_CODEX=true

@@ -279,19 +279,17 @@ build_image() {
     ensure_system_running
     local cfg="$CONFIG_FILE"
 
-    local fd_version gh_version claude_code_version claude_agent_acp_version codex_version
-    local python_version go_version golangci_lint_version install_acp_raw install_acp
+    local fd_version gh_version claude_code_version codex_version
+    local python_version go_version golangci_lint_version
     local install_godoc_mcp_raw install_godoc_mcp install_codex_raw install_codex
 
     fd_version="10.3.0"
     gh_version="2.87.3"
     claude_code_version="latest"
-    claude_agent_acp_version="latest"
     codex_version="latest"
     python_version="3.14"
     go_version="1.26.0"
     golangci_lint_version="v2.4.0"
-    install_acp="0"
     install_godoc_mcp="0"
     install_codex="0"
 
@@ -299,11 +297,9 @@ build_image() {
         fd_version="$(toml_get versions fd "$cfg" || true)"
         gh_version="$(toml_get versions gh "$cfg" || true)"
         claude_code_version="$(toml_get versions claude_code "$cfg" || true)"
-        claude_agent_acp_version="$(toml_get versions claude_agent_acp "$cfg" || true)"
         python_version="$(toml_get versions python "$cfg" || true)"
         go_version="$(toml_get versions go "$cfg" || true)"
         golangci_lint_version="$(toml_get versions golangci_lint "$cfg" || true)"
-        install_acp_raw="$(toml_get features install_claude_agent_acp "$cfg" || true)"
         install_godoc_mcp_raw="$(toml_get features install_godoc_mcp "$cfg" || true)"
         codex_version="$(toml_get versions codex "$cfg" || true)"
         install_codex_raw="$(toml_get features install_codex "$cfg" || true)"
@@ -311,16 +307,10 @@ build_image() {
         fd_version="${fd_version:-10.3.0}"
         gh_version="${gh_version:-2.87.3}"
         claude_code_version="${claude_code_version:-latest}"
-        claude_agent_acp_version="${claude_agent_acp_version:-latest}"
         python_version="${python_version:-3.14}"
         go_version="${go_version:-1.26.0}"
         golangci_lint_version="${golangci_lint_version:-v2.4.0}"
         codex_version="${codex_version:-latest}"
-
-        case "${install_acp_raw,,}" in
-            true|1|yes|on) install_acp="1" ;;
-            *) install_acp="0" ;;
-        esac
 
         case "${install_godoc_mcp_raw,,}" in
             true|1|yes|on) install_godoc_mcp="1" ;;
@@ -354,12 +344,6 @@ build_image() {
         echo "==> Resolved Claude Code latest -> v${claude_code_version}"
     fi
 
-    if [[ "$install_acp" == "1" && "$claude_agent_acp_version" == "latest" ]]; then
-        claude_agent_acp_version="$(curl -fsSL --retry 3 --retry-delay 2 \
-            "https://api.github.com/repos/zed-industries/claude-agent-acp/releases/latest" | jq -r '.tag_name')"
-        echo "==> Resolved claude-agent-acp latest -> ${claude_agent_acp_version}"
-    fi
-
     if [[ "$install_codex" == "1" && "$codex_version" == "latest" ]]; then
         codex_version="$(curl -fsSL --retry 3 --retry-delay 2 \
             "https://api.github.com/repos/openai/codex/releases/latest" | jq -r '.tag_name' | sed 's/^rust-v//')"
@@ -379,8 +363,6 @@ build_image() {
         --build-arg "FD_VERSION=$fd_version" \
         --build-arg "GH_VERSION=$gh_version" \
         --build-arg "CLAUDE_CODE_VERSION=$claude_code_version" \
-        --build-arg "CLAUDE_AGENT_ACP_VERSION=$claude_agent_acp_version" \
-        --build-arg "INSTALL_CLAUDE_AGENT_ACP=$install_acp" \
         --build-arg "PYTHON_VERSION=$python_version" \
         --build-arg "GO_VERSION=$go_version" \
         --build-arg "GOLANGCI_LINT_VERSION=$golangci_lint_version" \

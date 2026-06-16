@@ -19,7 +19,7 @@ Containers are ephemeral by default — all local changes are lost on exit. Push
 
 - After changing tool versions in `container-build.toml`
 - To pick up a new Claude Code binary (`claude_code = "latest"` resolves at build time)
-- After toggling `install_claude_agent_acp`
+- After toggling `install_godoc_mcp` or `install_codex`
 
 Runtime config (`container-run.toml`) changes never require a rebuild.
 
@@ -109,7 +109,7 @@ The container runs Linux arm64 but the host is macOS:
 
 ## Container Cleanup
 
-The `cleanup.sh` script manages containers (`claude-*`, `zed-*`), images (`claudecode-*`), and builder cache.
+The `cleanup.sh` script manages containers (`claude-*`), images (`claudecode-*`), and builder cache.
 
 ### Containers
 

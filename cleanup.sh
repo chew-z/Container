@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "$_src")" && pwd)"
 GLOBAL_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/container"
 
 # Container prefixes managed by this toolkit
-PREFIXES=("claude-" "zed-")
+PREFIXES=("claude-")
 IMAGE_PREFIX="claudecode"
 
 # ── Help ──────────────────────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ usage() {
     cat <<EOF
 Usage: $(basename "$0") [COMMAND]
 
-Manage Claude Code containers (claude-*, zed-*), images, and builder cache.
+Manage Claude Code containers (claude-*), images, and builder cache.
 
 Containers:
   --list                  List all containers and their status (default)
