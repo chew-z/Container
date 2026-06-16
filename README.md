@@ -89,7 +89,3 @@ Containers can connect to MCP servers via HTTP transport — no binaries baked i
 - **Host-side Postgres** — reached via Apple Container gateway (`192.168.64.1`)
 
 See [CONFIGURATION.md](CONFIGURATION.md#mcp---remote-mcp-servers) and [MCP in Containers](docs/mcp-in-containers.md) for setup.
-
-## Zed ACP Mode (On Hold)
-
-> Blocked by an upstream bug in the `claude-agent-acp` static binary (linux-arm64) — crashes with a JavaScript TDZ error (`Cannot access 'z4' before initialization`) during `session/prompt`. The Homebrew (Node.js) build works fine; only the static Bun SEA binary is affected. `zed-claude-acp.sh` is ready — waiting for a fix.
