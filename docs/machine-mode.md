@@ -27,7 +27,7 @@ into how the repo and credentials get in, which is what this design covers.
 | Persistence across stop/start | ✅ | Machine filesystem is durable; only `machine rm` deletes storage |
 | Arbitrary `--mount` / `--volume` on machine | ❌ **Not supported** | `machine create` and `machine run` expose only: resources, `--home-mount`, `--env`/`--env-file`, user/uid/gid, `--workdir`, `--detach`, `--root`. No bind/volume flags. |
 | `container cp` into a machine | ❌ Not applicable | `container cp` targets *containers* (`name:/path`), a different object class. No evidence it addresses machines. |
-| SSH agent socket forwarding | ⚠️ Partial | Socket path `/var/host-services/ssh-auth.sock` appears in machine tests (`RuntimeService.swift`, `TestCLIMachine.swift`), but those almost certainly ran under default `rw`. **Unconfirmed under `--home-mount none`.** Also `SSH_AUTH_SOCK` is not auto-exported; must pass `-e`. Treat as nice-to-have, not the primary git path. |
+| SSH agent socket forwarding | ❌ **Dropped** | Socket path `/var/host-services/ssh-auth.sock` appears in machine tests (`RuntimeService.swift`, `TestCLIMachine.swift`), but those almost certainly ran under default `rw`. Unconfirmed under `--home-mount none`. **Decision:** no SSH support in machine mode — GH_TOKEN/HTTPS covers all git operations. |
 | Host user mapping (uid/gid) | ✅ | `machine run` runs as a user matching the host account by default (`--root` to override) |
 | Base image must have `/sbin/init` | ✅ | `alpine:latest` works; `debian:bookworm-slim` fails (no init) — confirmed in prior testing |
 
@@ -54,15 +54,13 @@ is unreachable from the machine; the repo lives only inside the machine; work fl
 **Why GH_TOKEN, not SSH, is the primary git path:** the existing auth bridge (RUNNING.md) already
 establishes that git inside our containers uses **GH_TOKEN over HTTPS** with a URL rewrite, because
 macOS Secure-Enclave SSH keys don't function in the Linux guest. GH_TOKEN is therefore the
-*production-proven* mechanism for both clone and push. SSH-agent forwarding (above) is an unconfirmed
-nice-to-have under `none` and must not be load-bearing in the design.
+*production-proven* mechanism for both clone and push. SSH is **not supported** in machine mode — macOS Secure-Enclave keys don't work in the Linux guest, and GH_TOKEN/HTTPS covers all git operations.
 
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "9pt"}, "flowchart": {"htmlLabels": false}}}%%
 flowchart TB
     subgraph host["macOS host"]
         KC["Keychain<br/><i>OAuth, GH_TOKEN, MCP</i>"]
-        AGENT["ssh-agent<br/><i>$SSH_AUTH_SOCK</i>"]
         SCRIPT["machine-launch.sh"]
     end
 
@@ -74,7 +72,6 @@ flowchart TB
 
     SCRIPT -->|"machine create --home-mount none"| machine
     KC -->|"--env-file (chmod 600, ephemeral)"| PROV
-    AGENT -->|"socket fwd + -e SSH_AUTH_SOCK"| PROV
     PROV --> WS --> CC
     CC -->|"git push → PR"| host
 ```
@@ -94,7 +91,7 @@ stateDiagram-v2
 
     note right of Provisioned
         Tools + cloned repo persist.
-        Re-entry skips install/clone.
+        Re-entry: git fetch (working tree preserved).
     end note
 ```
 
@@ -104,8 +101,8 @@ stateDiagram-v2
 |---|---|---|---|
 | `--home-mount` | `rw` / `ro` / `none` | **`none`** | `none` = isolation preserved. `rw` = Apple's "edit on Mac, build inside" (defeats sandbox). |
 | Base image | any image with `/sbin/init` | `alpine:latest` | Debian slim lacks init. Custom image only if Alpine packaging proves limiting. |
-| Repo ingress | `git clone` / `tar` over stdin | `git clone` over **GH_TOKEN/HTTPS** | Clone over the proven GH_TOKEN path (see below) matches PR-flow philosophy. |
-| Credentials | `--env-file` (GH_TOKEN, OAuth, MCP); SSH socket optional | env-file (chmod 600) | Reuse the ephemeral-mode env-file pattern. **Never** mount Keychain in. |
+| Repo ingress | `git clone` / `tar` over stdin | `git clone` over **GH_TOKEN/HTTPS** | Clone on first boot; `git fetch` on re-entry (working tree preserved). |
+| Credentials | `--env-file` (GH_TOKEN, OAuth, MCP) | env-file (chmod 600) | Reuse the ephemeral-mode env-file pattern. **Never** mount Keychain in. `CLAUDE_CODE_OAUTH_TOKEN` (long-lived) eliminates token refresh. |
 | Persistence scope | per-project machine / shared | **per-project** (`claude-machine-<slug>`) | Avoids state bleed across projects (shared `$HOME` is exactly what we're avoiding). |
 | Idle teardown | TTL reaper / manual | manual `machine stop` | Optional reaper later; machines are cheap when stopped. |
 
@@ -118,12 +115,9 @@ Manually validate the load-bearing assumptions before writing `machine-launch.sh
 3. Install Claude Code inside; confirm it persists across `machine stop` / `machine run`.
 4. `git clone` a private repo using `GH_TOKEN`/HTTPS passed via `--env-file`; confirm success.
 5. Confirm a `git push` from inside reaches the remote **using GH_TOKEN alone** (no SSH). This is
-   the load-bearing path — it must work independently of the SSH socket.
-6. *(Optional, lower priority)* Probe SSH forwarding under `none`: pass
-   `-e SSH_AUTH_SOCK=/var/host-services/ssh-auth.sock` and test git over SSH. Informational only —
-   the design does not depend on this succeeding.
+   the load-bearing path — it must work independently of any SSH mechanism.
 
-**Exit criterion:** all six pass → the `none` model is viable. Any failure reshapes the design.
+**Exit criterion:** all five pass → the `none` model is viable. Any failure reshapes the design.
 
 ### Phase 1 — `machine-launch.sh` MVP
 - Reuse from `launch.sh`: symlink-safe `SCRIPT_DIR`, layered config resolution, Keychain
@@ -132,15 +126,18 @@ Manually validate the load-bearing assumptions before writing `machine-launch.sh
 - **create-or-reuse:** if the machine exists, `machine run` into it; else `machine create
   --home-mount none` then provision.
 - **First-boot provision** (idempotent): install Claude Code + tools; `git clone` the project
-  into `/work/<slug>` (or `git fetch` if already present); register MCP servers; render
+  into `/work/<slug>` (skip if already present); register MCP servers; render
   `CONTAINER.md`. Mark completion with a sentinel file so re-entry is fast.
+- **Re-entry:** `git fetch` to update remote refs; leave working tree as-is.
 - `exec claude [flags]` as the mapped host user.
 
 ### Phase 2 — Credential & MCP parity
-- Mirror ephemeral mode: OAuth, GH_TOKEN (+ git HTTPS rewrite), MCP tokens, timezone.
-- Decide credential refresh strategy: env-file is injected per `machine run`, so rotated tokens
-  flow in on next entry — verify OAuth refresh survives a stopped machine.
-- SSH agent: export `SSH_AUTH_SOCK` explicitly (not auto-set in machines).
+- Mirror ephemeral mode: GH_TOKEN (+ git HTTPS rewrite), MCP tokens, timezone.
+- OAuth: inject `CLAUDE_CODE_OAUTH_TOKEN` (long-lived token from host env) via `--env-file`. No
+  refresh step needed — the token persists across machine stop/start.
+- MCP: registered on first boot only; definitions are durable in the machine filesystem.
+- ~~SSH agent~~: dropped — no SSH support in machine mode. macOS Secure-Enclave keys don't work
+  in the Linux guest, and GH_TOKEN/HTTPS covers all git operations.
 
 ### Phase 3 — Lifecycle integration
 - Extend `cleanup.sh` with a machine class: list/stop/rm `claude-machine-*` (distinct from
@@ -150,17 +147,24 @@ Manually validate the load-bearing assumptions before writing `machine-launch.sh
 
 ## Open questions
 
-- **Repo update model.** On re-entry: `git fetch` + leave working tree to the user, or
-  reset to a fresh clone? Persistent working tree can drift; a fresh clone loses in-progress work.
-- **Credential refresh on long-lived machines.** OAuth tokens expire; confirm re-injection via
-  `--env-file` on each `machine run` is sufficient, or whether a refresh step is needed.
-- **MCP registration drift.** Registrations persist in the machine — how to update when the host
-  config changes? Re-run registration on every entry (idempotent) vs. only on first boot.
+~~**Repo update model.**~~ **Resolved:** on re-entry, `git fetch` to update remote refs; leave
+the working tree untouched. In-progress work is preserved. A fresh clone is never performed —
+the machine's cloned repo is the long-lived working copy.
+
+~~**Credential refresh on long-lived machines.**~~ **Resolved:** `CLAUDE_CODE_OAUTH_TOKEN` is a
+long-lived token injected via `--env-file` at machine creation. No re-injection or refresh is
+needed on subsequent `machine run` invocations. GH_TOKEN is similarly stable.
+
+~~**MCP registration drift.**~~ **Resolved:** MCP servers are registered once during first-boot
+provisioning. Definitions persist in the machine filesystem and survive stop/start cycles. If
+the host MCP config changes, the user can re-provision manually or `machine rm` and recreate.
+
 - **Per-project storage cost.** One machine per project multiplies disk use; document a cleanup
   cadence via `cleanup.sh`.
-- **`SSH_AUTH_SOCK` robustness.** Apple's `--ssh` convenience (auto-retarget on re-login) is a
-  *container run* feature; confirm the equivalent is needed/available for machines or handle
-  socket staleness manually.
+
+~~**`SSH_AUTH_SOCK` robustness.**~~ **Resolved — dropped.** No SSH support in machine mode.
+All git operations use GH_TOKEN over HTTPS. This eliminates socket staleness, forwarding
+plumbing, and the unconfirmed `--home-mount none` SSH behavior entirely.
 
 ## Decision summary
 

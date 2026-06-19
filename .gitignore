@@ -6,6 +6,7 @@ docs/source/
 .agents/
 .claude/
 .codex/
+.qoder/
 .mcp.json
 
 container-build.toml
