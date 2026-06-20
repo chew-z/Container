@@ -1,7 +1,6 @@
-# Machine Mode — Persistent, Isolated Containers (Design)
+# Machine Mode — Persistent, Isolated Containers
 
-> **Status:** Design sketch — deferred "next iteration" work. Not yet implemented.
-> **Scope:** An *alternative* run mode (`machine-launch.sh`), not a replacement for ephemeral `launch.sh`.
+> **Status:** Implemented (`machine-launch.sh`). An *alternative* run mode, not a replacement for ephemeral `launch.sh`.
 
 ## Problem
 
@@ -106,65 +105,38 @@ stateDiagram-v2
 | Persistence scope | per-project machine / shared | **per-project** (`claude-machine-<slug>`) | Avoids state bleed across projects (shared `$HOME` is exactly what we're avoiding). |
 | Idle teardown | TTL reaper / manual | manual `machine stop` | Optional reaper later; machines are cheap when stopped. |
 
-## Plan (phased)
+## Implementation
 
-### Phase 0 — Spike (no script)
-Manually validate the load-bearing assumptions before writing `machine-launch.sh`:
-1. `container machine create --home-mount none --name spike alpine:latest`
-2. Confirm host `$HOME` is **not** visible inside (`ls /Users` / `ls ~` empty or absent).
-3. Install Claude Code inside; confirm it persists across `machine stop` / `machine run`.
-4. `git clone` a private repo using `GH_TOKEN`/HTTPS passed via `--env-file`; confirm success.
-5. Confirm a `git push` from inside reaches the remote **using GH_TOKEN alone** (no SSH). This is
-   the load-bearing path — it must work independently of any SSH mechanism.
+Machine mode is implemented in `machine-launch.sh` (~930 lines). Key implementation details:
 
-**Exit criterion:** all five pass → the `none` model is viable. Any failure reshapes the design.
+- **Entry point:** `machine-launch.sh` — manages the full create-or-reuse lifecycle.
+- **Provisioning:** heredoc-based shell script piped to `container machine run --root` with credentials via `--env-file` (chmod 600, ephemeral on host).
+- **Sentinel file:** `/var/lib/claude-machine-provisioned` — marks a machine as fully provisioned; re-entry skips provisioning and only runs `git fetch`.
+- **Git identity:** extracted from host `git config --global`, with `[machine]` TOML fallback. Hard-fails if neither is available.
+- **Repo URL:** derived from `git remote get-url origin`, SSH→HTTPS converted, GH_TOKEN injected for private repos.
+- **Claude settings:** `~/.claude/settings.json`, `settings.local.json`, and `.claude.json` are transported into the machine at provision time.
+- **MCP registration:** Postgres, remote HTTP servers, and Talk MCP are registered during provisioning via `claude mcp add -s project`.
+- **Hooks:** `~/.claude/hooks/` is tar+base64-encoded on the host and extracted inside the machine.
+- **Reprovisioning:** `--reprovision` / `--reset` deletes the machine and starts fresh.
+- **Status inspection:** `--status` shows machine existence, provisioning state, and current status without launching.
+- **Cleanup:** `cleanup.sh --machines` provides list/stop/remove/prune for `claude-machine-*` machines.
 
-### Phase 1 — `machine-launch.sh` MVP
-- Reuse from `launch.sh`: symlink-safe `SCRIPT_DIR`, layered config resolution, Keychain
-  credential extraction, the `--env-file` (chmod 600) credential pattern.
-- Machine naming: `claude-machine-<project-slug>`.
-- **create-or-reuse:** if the machine exists, `machine run` into it; else `machine create
-  --home-mount none` then provision.
-- **First-boot provision** (idempotent): install Claude Code + tools; `git clone` the project
-  into `/work/<slug>` (skip if already present); register MCP servers; render
-  `CONTAINER.md`. Mark completion with a sentinel file so re-entry is fast.
-- **Re-entry:** `git fetch` to update remote refs; leave working tree as-is.
-- `exec claude [flags]` as the mapped host user.
+## Future work
 
-### Phase 2 — Credential & MCP parity
-- Mirror ephemeral mode: GH_TOKEN (+ git HTTPS rewrite), MCP tokens, timezone.
-- OAuth: inject `CLAUDE_CODE_OAUTH_TOKEN` (long-lived token from host env) via `--env-file`. No
-  refresh step needed — the token persists across machine stop/start.
-- MCP: registered on first boot only; definitions are durable in the machine filesystem.
-- ~~SSH agent~~: dropped — no SSH support in machine mode. macOS Secure-Enclave keys don't work
-  in the Linux guest, and GH_TOKEN/HTTPS covers all git operations.
+- **Per-project storage cost.** One machine per project multiplies disk use; document a cleanup cadence via `cleanup.sh`.
+- **Optional idle TTL reaper.** Machines are cheap when stopped, but an automated reaper could clean up stale ones.
 
-### Phase 3 — Lifecycle integration
-- Extend `cleanup.sh` with a machine class: list/stop/rm `claude-machine-*` (distinct from
-  ephemeral `claude-*` containers).
-- Optional idle TTL reaper.
-- Docs: a "Machine mode vs ephemeral mode" comparison in RUNNING.md.
+## Resolved design decisions
 
-## Open questions
+All major design questions were resolved through implementation:
 
-~~**Repo update model.**~~ **Resolved:** on re-entry, `git fetch` to update remote refs; leave
-the working tree untouched. In-progress work is preserved. A fresh clone is never performed —
-the machine's cloned repo is the long-lived working copy.
+~~**Repo update model.**~~ **Resolved:** on re-entry, `git fetch` to update remote refs; leave the working tree untouched. In-progress work is preserved. A fresh clone is never performed — the machine's cloned repo is the long-lived working copy.
 
-~~**Credential refresh on long-lived machines.**~~ **Resolved:** `CLAUDE_CODE_OAUTH_TOKEN` is a
-long-lived token injected via `--env-file` at machine creation. No re-injection or refresh is
-needed on subsequent `machine run` invocations. GH_TOKEN is similarly stable.
+~~**Credential refresh on long-lived machines.**~~ **Resolved:** `CLAUDE_CODE_OAUTH_TOKEN` is a long-lived token injected via `--env-file` at machine creation. No re-injection or refresh is needed on subsequent `machine run` invocations. GH_TOKEN is similarly stable. If a token is rotated, `--reprovision` re-injects it.
 
-~~**MCP registration drift.**~~ **Resolved:** MCP servers are registered once during first-boot
-provisioning. Definitions persist in the machine filesystem and survive stop/start cycles. If
-the host MCP config changes, the user can re-provision manually or `machine rm` and recreate.
+~~**MCP registration drift.**~~ **Resolved:** MCP servers are registered once during first-boot provisioning. Definitions persist in the machine filesystem and survive stop/start cycles. If the host MCP config changes, the user can `--reprovision` or `cleanup.sh --machines --remove` and recreate.
 
-- **Per-project storage cost.** One machine per project multiplies disk use; document a cleanup
-  cadence via `cleanup.sh`.
-
-~~**`SSH_AUTH_SOCK` robustness.**~~ **Resolved — dropped.** No SSH support in machine mode.
-All git operations use GH_TOKEN over HTTPS. This eliminates socket staleness, forwarding
-plumbing, and the unconfirmed `--home-mount none` SSH behavior entirely.
+~~**`SSH_AUTH_SOCK` robustness.**~~ **Resolved — dropped.** No SSH support in machine mode. All git operations use GH_TOKEN over HTTPS. This eliminates socket staleness, forwarding plumbing, and the unconfirmed `--home-mount none` SSH behavior entirely.
 
 ## Decision summary
 

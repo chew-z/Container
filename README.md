@@ -1,8 +1,8 @@
 # Claude Code in Apple Container
 
-**Run Claude Code inside a sandboxed Linux container on macOS** — full isolation, ephemeral by default, credentials bridged automatically (so uses your Claude Code plan).
+**Run Claude Code inside a sandboxed Linux container on macOS** — full isolation, ephemeral by default, persistent machine mode optional, credentials bridged automatically (so uses your Claude Code plan).
 
-Claude Code runs in an ephemeral, isolated container — a strong fit for YOLO permission modes like `--dangerously-skip-permissions`: risky actions are sandboxed, and local changes disappear unless you explicitly persist them via git.
+Claude Code runs in an ephemeral, isolated container — a strong fit for YOLO permission modes like `--dangerously-skip-permissions`: risky actions are sandboxed, and local changes disappear unless you explicitly persist them via git. For persistent environments with instant startup (~2s), machine mode (`machine-launch.sh`) offers the same isolation with tools, repos, and session state surviving across runs.
 
 ## Why Apple Container
 
@@ -49,8 +49,9 @@ cp container-run.example.toml ~/.config/container/container-run.toml
 
 | Document | What's inside |
 |----------|---------------|
-| [RUNNING.md](RUNNING.md) | Building images, running containers, workspace modes, cleanup |
-| [CONFIGURATION.md](CONFIGURATION.md) | Build config, runtime config, MCP servers, permissions |
+| [RUNNING.md](RUNNING.md) | Building images, running containers, machine mode, cleanup |
+| [CONFIGURATION.md](CONFIGURATION.md) | Build config, runtime config, machine config, MCP, permissions |
+| [Machine Mode](docs/machine-mode.md) | Persistent isolated containers — architecture and reference |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common errors and fixes |
 | [Container Lifecycle](docs/container-lifecycle.md) | How containers, images, and builder cache interact |
 | [MCP in Containers](docs/mcp-in-containers.md) | MCP server architecture and setup details |
@@ -61,10 +62,11 @@ cp container-run.example.toml ~/.config/container/container-run.toml
 |------|---------|
 | `Dockerfile` | Multi-target image: base + Python or Go |
 | `entrypoint.sh` | Container startup: config, credentials, workspace, MCP registration |
-| `launch.sh` | Main runner: builds image, extracts credentials, launches container |
-| `cleanup.sh` | Container/image/builder lifecycle management |
+| `launch.sh` | Ephemeral mode runner: builds image, extracts credentials, launches container |
+| `machine-launch.sh` | Machine mode runner: persistent isolated containers via `container machine` |
+| `cleanup.sh` | Container, machine, image, and builder lifecycle management |
 | `container-build.toml` | Build-time versions and feature flags |
-| `container-run.toml` | Per-project runtime: resources, Claude mode, MCP, workspace excludes |
+| `container-run.toml` | Per-project runtime: resources, Claude mode, MCP, machine settings |
 | `container-run.example.toml` | Annotated example with all options |
 | `templates/CONTAINER.*.md.tmpl` | Language-specific CONTAINER.md templates |
 

@@ -4,7 +4,7 @@ Understanding how containers, images, and the builder interact — and what gets
 
 ## Overview
 
-Three independent subsystems collaborate when you run `launch.sh`:
+Three independent subsystems collaborate when you run `launch.sh` (ephemeral mode) or `machine-launch.sh` (machine mode):
 
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "9pt"}, "flowchart": {"htmlLabels": false, "useMaxWidth": false}}}%%
@@ -146,6 +146,41 @@ stateDiagram-v2
 
 > See also: Apple Container [how-to — configure container resources](https://github.com/apple/container/blob/main/docs/how-to.md#configure-memory-and-cpus-for-your-containers) and [technical overview](https://github.com/apple/container/blob/main/docs/technical-overview.md).
 
+## Machines
+
+Machines are persistent Linux VMs created via `container machine` with `--home-mount none`. Unlike containers, they survive stop/start cycles — tools, cloned repos, and Claude's session state persist. Startup is ~2s after first provisioning.
+
+```mermaid
+%%{init: {"themeVariables": {"fontSize": "9pt"}}}%%
+stateDiagram-v2
+    [*] --> Absent
+    Absent --> Created: machine create --home-mount none
+    Created --> Provisioned: first-boot setup (Claude + clone)
+    Provisioned --> Running: machine run → claude
+    Running --> Stopped: session ends / machine stop
+    Stopped --> Running: machine run (~2s, state intact)
+    Stopped --> Absent: machine delete
+
+    note right of Provisioned
+        Tools + cloned repo persist.
+        Re-entry: git fetch only.
+    end note
+```
+
+### Machine management commands
+
+| Command | What happens |
+|---------|-------------|
+| `container machine list` | List all machines |
+| `container machine stop NAME` | Stop a running machine |
+| `container machine delete NAME` | Delete a machine (destroys storage) |
+| `cleanup.sh --machines` | List managed machines (`claude-machine-*`) |
+| `cleanup.sh --machines --stop` | Stop all managed machines |
+| `cleanup.sh --machines --remove` | Delete all stopped machines |
+| `cleanup.sh --machines --prune` | Stop + delete all managed machines |
+
+> See also: [Machine Mode](machine-mode.md) and [RUNNING.md](../RUNNING.md#machine-mode-machine-launchsh).
+
 ## Full Lifecycle: Build → Run → Cleanup
 
 ```mermaid
@@ -217,6 +252,7 @@ Use `cleanup.sh --disk-usage` (wraps `container system df`) to see how much spac
 - [Apple Container — Technical Overview](https://github.com/apple/container/blob/main/docs/technical-overview.md) — how `container` runs lightweight VMs
 - [Apple Container — How-to](https://github.com/apple/container/blob/main/docs/how-to.md) — configure builder/container resources, mounts, networking
 - [Apple Container — Command Reference](https://github.com/apple/container/blob/main/docs/command-reference.md) — full CLI documentation
-- [RUNNING.md](../RUNNING.md) — building images and running containers in this project
+- [RUNNING.md](../RUNNING.md) — building images, running containers, machine mode
+- [Machine Mode](machine-mode.md) — persistent isolated containers architecture
 - [CONFIGURATION.md](../CONFIGURATION.md) — build config, feature flags, permission modes
 - [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) — common errors and fixes

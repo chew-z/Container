@@ -26,11 +26,15 @@ Host Mac                              Container (Linux arm64)
 
 ## How MCP Registration Works
 
-The host's `.mcp.json` is **not** copied into the container — it contains macOS-specific stdio paths that won't work in Linux. Instead, `entrypoint.sh` starts with a clean slate:
+The host's `.mcp.json` is **not** copied into the container — it contains macOS-specific stdio paths that won't work in Linux. Instead, servers are re-registered from scratch:
+
+**Ephemeral mode (`launch.sh`):** `entrypoint.sh` starts with a clean slate:
 
 1. Writes an empty `.mcp.json` to `/workspace/` (`{"mcpServers": {}}`)
 2. Re-registers each configured server via `claude mcp add -s project`
 3. This writes project-scoped entries into the fresh `.mcp.json`
+
+**Machine mode (`machine-launch.sh`):** provisioning writes `.mcp.json` and registers servers the same way, but definitions are **persistent** — they survive machine stop/start cycles. No re-registration on re-entry.
 
 **Global MCP servers** (configured in `~/.claude.json` or `settings.json`) are unaffected — Claude loads those separately. Only project-scoped servers (`.mcp.json`) are rebuilt.
 
@@ -95,8 +99,9 @@ If your host's `settings.local.json` already pre-approves tools like `mcp__pusho
 | File                 | Role                                                                  |
 | -------------------- | --------------------------------------------------------------------- |
 | `container-run.toml` | `[mcp]` and `[postgres]` configuration                                |
-| `launch.sh`          | Reads config, resolves tokens from Keychain, passes env vars          |
-| `entrypoint.sh`      | Registers servers via `claude mcp add`, bridges `settings.local.json` |
+| `launch.sh`          | Reads config, resolves tokens from Keychain, passes env vars (ephemeral) |
+| `machine-launch.sh`  | Same, but during machine provisioning (persistent)                    |
+| `entrypoint.sh`      | Registers servers via `claude mcp add` (ephemeral mode only)          |
 
 ## Verification
 

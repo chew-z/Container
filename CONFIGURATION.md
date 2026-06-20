@@ -1,6 +1,6 @@
 # Configuration
 
-Two config files: `container-build.toml` (build-time) and `container-run.toml` (runtime). Both use **layered resolution** — one file wins entirely, no merging.
+Two config files: `container-build.toml` (build-time) and `container-run.toml` (runtime). Both use **layered resolution** — one file wins entirely, no merging. `container-run.toml` is read by both `launch.sh` (ephemeral mode) and `machine-launch.sh` (machine mode).
 
 ## Config Resolution
 
@@ -54,7 +54,7 @@ install_codex = true            # OpenAI Codex CLI
 
 ## container-run.toml
 
-Runtime configuration. Place in your project root (takes priority) or `~/.config/container/` (global default). Read on every `launch.sh` run — no rebuild needed.
+Runtime configuration. Place in your project root (takes priority) or `~/.config/container/` (global default). Read by both `launch.sh` (ephemeral mode) and `machine-launch.sh` (machine mode) on every run — no rebuild needed. Sections marked "EPHEMERAL MODE ONLY" are ignored by machine mode.
 
 A full example is at `container-run.example.toml`.
 
@@ -144,7 +144,9 @@ Initial prompt sent to Claude at session start. Useful for environment verificat
 
 Appended after the built-in "read CONTAINER.md" prompt via `--append-system-prompt`.
 
-### [workspace] — Copy Excludes
+### [workspace] — Copy Excludes (Ephemeral Mode Only)
+
+> **Ignored by `machine-launch.sh`.** Machine mode clones via git; there is no host-to-container copy step.
 
 ```toml
 [workspace]
@@ -164,7 +166,9 @@ timezone = "Europe/Warsaw"      # Default: Europe/Warsaw
 
 Sets `TZ` env var — affects git timestamps, logs, etc.
 
-### [credentials] — SSH Hosts
+### [credentials] — SSH Hosts (Ephemeral Mode Only)
+
+> **Ignored by `machine-launch.sh`.** Machine mode uses GH_TOKEN/HTTPS for all git operations; SSH is not supported.
 
 ```toml
 [credentials]
@@ -193,7 +197,7 @@ postgres-mcp -t http -port 8090 -ip 0.0.0.0 -dsn "postgresql://user:pass@localho
 
 ### [mcp] — Remote MCP Servers
 
-The host's `.mcp.json` is not copied — it has macOS-specific stdio paths. Instead, `entrypoint.sh` writes a clean `.mcp.json` and re-registers servers via `claude mcp add -s project`. Global MCP servers (from `~/.claude.json` or `settings.json`) are unaffected.
+The host's `.mcp.json` is not copied — it has macOS-specific stdio paths. Instead, servers are re-registered from scratch: `entrypoint.sh` in ephemeral mode, or the provisioning script in machine mode. In machine mode, MCP definitions are **persistent** — they survive machine stop/start cycles. Global MCP servers (from `~/.claude.json` or `settings.json`) are unaffected.
 
 ```toml
 [mcp]
@@ -254,7 +258,53 @@ Available conditions: `HAS_CODEX`, `HAS_TALK`, `HAS_GOLANGCI_CONFIG`, `HAS_MCP`.
 
 ## System Prompt Injection
 
-`launch.sh` injects via `--append-system-prompt`:
+Both `launch.sh` and `machine-launch.sh` inject via `--append-system-prompt`:
 
 1. `"You MUST read CONTAINER.md in the workspace root before doing anything else."`
 2. `claude_additional_system_prompt` value (if configured)
+
+## [machine] — Machine Mode Settings
+
+**Used by `machine-launch.sh` only.** Ignored by `launch.sh`.
+
+Machine mode uses `container machine` with `--home-mount none` for persistent, isolated containers. The host filesystem is unreachable — the repo is cloned via GH_TOKEN/HTTPS and work flows back as git pushes/PRs.
+
+```toml
+[machine]
+git_user_name = ""      # fallback when host ~/.gitconfig lacks user.name
+git_user_email = ""     # fallback when host ~/.gitconfig lacks user.email
+# memory = "4g"         # override [resources] for machine mode
+# cpus = 4              # override [resources] for machine mode
+```
+
+### Git Identity
+
+Machine mode cannot read host `~/.gitconfig` (no host filesystem access under `--home-mount none`). Git identity is resolved in this order:
+
+1. Host `git config --global user.name` / `user.email` (read by `machine-launch.sh` on the host side)
+2. `[machine]` TOML fallback: `git_user_name` / `git_user_email`
+3. **Hard fail** if neither is available
+
+### Resource Precedence
+
+Machine VM resources follow a separate precedence chain:
+
+**CLI `--memory`/`--cpus`** > `[machine]` memory/cpus > `[resources]` memory/cpus > defaults (4g, 4 CPUs)
+
+This allows different resource allocation for ephemeral vs machine mode in the same `container-run.toml`.
+
+### Behavioral Differences from Ephemeral Mode
+
+| Aspect | Ephemeral (`launch.sh`) | Machine (`machine-launch.sh`) |
+|--------|------------------------|-------------------------------|
+| Workspace | Copied from host mount | `git clone` inside machine |
+| Uncommitted work | Lost unless pushed | Preserved in machine filesystem |
+| Untracked files | Carried in (copy mode) | Must be injected manually |
+| SSH support | Copied but non-functional | Not supported |
+| Host filesystem | Read-only mounts | No access (`--home-mount none`) |
+| Startup | Image build + container create | ~2s (after first provision) |
+
+### Sections Ignored by Machine Mode
+
+- `[workspace]` — no host-to-container copy step
+- `[credentials]` — SSH is not supported; all git operations use GH_TOKEN/HTTPS
