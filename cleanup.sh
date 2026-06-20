@@ -14,6 +14,7 @@ GLOBAL_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/container"
 
 # Container prefixes managed by this toolkit
 PREFIXES=("claude-")
+MACHINE_PREFIX="claude-machine-"
 IMAGE_PREFIX="claudecode"
 
 # ── Help ──────────────────────────────────────────────────────────────────────
@@ -40,6 +41,12 @@ Builder cache:
 Full cleanup:
   --full-cleanup          Stop/remove all containers + delete images + clear builder cache
   --disk-usage            Show container system disk usage
+
+Machines:
+  --machines                List all claude-machine-* machines
+  --machines --stop [NAME]  Stop a machine, or all if no name given
+  --machines --remove [NAME] Delete a machine, or all stopped
+  --machines --prune        Stop and delete all machines
 
 Other:
   -h, --help              Show this help and exit
@@ -267,9 +274,75 @@ cmd_builder_restart() {
 cmd_full_cleanup() {
     cmd_prune
     echo ""
+    cmd_machines_prune
+    echo ""
     cmd_images --prune
     echo ""
     cmd_builder_clear_cache
+}
+
+# ── Machine helpers ──────────────────────────────────────────────────────────
+get_managed_machines() {
+    container machine list --quiet 2>/dev/null | grep "^${MACHINE_PREFIX}" || true
+}
+
+machine_status() {
+    local name="$1"
+    container machine list --format json 2>/dev/null \
+        | jq -r --arg n "$name" '.[] | select(.id == $n) | .status // "unknown"' 2>/dev/null \
+        || echo "unknown"
+}
+
+cmd_machines_list() {
+    local machines
+    machines="$(get_managed_machines)"
+    if [[ -z "$machines" ]]; then
+        echo "No machines found."
+        return
+    fi
+    printf "%-35s  %-10s\n" "MACHINE" "STATUS"
+    printf "%-35s  %-10s\n" "-------" "------"
+    while IFS= read -r name; do
+        printf "%-35s  %-10s\n" "$name" "$(machine_status "$name")"
+    done <<< "$machines"
+}
+
+cmd_machines_stop() {
+    local target="${1:-}"
+    if [[ -n "$target" ]]; then
+        echo "Stopping machine: $target"
+        container machine stop "$target" 2>/dev/null && echo "  stopped" || echo "  already stopped"
+        return
+    fi
+    local machines
+    machines="$(get_managed_machines)"
+    [[ -z "$machines" ]] && { echo "No machines found."; return; }
+    while IFS= read -r name; do
+        echo "Stopping machine: $name"
+        container machine stop "$name" 2>/dev/null && echo "  stopped" || echo "  already stopped"
+    done <<< "$machines"
+}
+
+cmd_machines_remove() {
+    local target="${1:-}"
+    if [[ -n "$target" ]]; then
+        echo "Deleting machine: $target"
+        container machine delete "$target" 2>/dev/null && echo "  deleted" || echo "  failed"
+        return
+    fi
+    local machines
+    machines="$(get_managed_machines)"
+    [[ -z "$machines" ]] && { echo "No machines found."; return; }
+    while IFS= read -r name; do
+        echo "Deleting machine: $name"
+        container machine delete "$name" 2>/dev/null && echo "  deleted" || echo "  failed"
+    done <<< "$machines"
+}
+
+cmd_machines_prune() {
+    cmd_machines_stop
+    echo ""
+    cmd_machines_remove
 }
 
 # ── Disk usage ───────────────────────────────────────────────────────────────
@@ -312,6 +385,22 @@ case "$COMMAND" in
         ;;
     --disk-usage)
         cmd_disk_usage
+        ;;
+    --machines)
+        case "${2:-}" in
+            --stop)
+                cmd_machines_stop "${3:-}"
+                ;;
+            --remove)
+                cmd_machines_remove "${3:-}"
+                ;;
+            --prune)
+                cmd_machines_prune
+                ;;
+            *)
+                cmd_machines_list
+                ;;
+        esac
         ;;
     -h|--help)
         usage

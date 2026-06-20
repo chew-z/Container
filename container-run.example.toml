@@ -1,13 +1,13 @@
 # Per-project container runtime configuration
 # Place this file as container-run.toml in your project root.
-# CLI flags (--memory, --cpus) override these values.
-# This file is read by launch.sh on every run (no image rebuild required).
+# Read by both launch.sh (ephemeral) and machine-launch.sh (machine mode).
+# Sections marked "EPHEMERAL MODE ONLY" are ignored by machine mode.
 #
-# Resource precedence (highest → lowest):
-#   1. CLI flags (--memory, --cpus)
-#   2. This file ([resources] section)
-#   3. ~/.config/container/config.toml [container] (Apple Container system defaults)
-#   4. Built-in defaults (4 CPUs, 1 GiB RAM)
+# Resource precedence — ephemeral (launch.sh):
+#   CLI flags > [resources] > system defaults
+#
+# Resource precedence — machine (machine-launch.sh):
+#   CLI flags > [machine] > [resources] > defaults (4g, 4 CPUs)
 
 [resources]
 # Memory for the container VM (e.g., "2g", "8g", "512m")
@@ -54,6 +54,9 @@ claude_model = "haiku"
 claude_query = "Read @CONTAINER.md and verify environment. Check sudo, network access, timezone, github access"
 
 [workspace]
+# EPHEMERAL MODE ONLY — ignored by machine-launch.sh.
+# Machine mode clones via git; there is no host-to-container copy step.
+#
 # Additional patterns to exclude when copying workspace into the container.
 # These are ADDED to the built-in defaults (.venv, node_modules, __pycache__, etc.)
 # Each pattern is passed as --exclude to tar.
@@ -70,6 +73,9 @@ additional_excludes = []
 timezone = "Europe/Warsaw"
 
 [credentials]
+# EPHEMERAL MODE ONLY — ignored by machine-launch.sh.
+# Machine mode uses GH_TOKEN/HTTPS for all git operations; SSH is not supported.
+#
 # Git hosts to add to known_hosts via ssh-keyscan.
 # Default (when empty or absent): github.com only.
 ssh_known_hosts = ["github.com"]
@@ -158,3 +164,26 @@ servers = [
     "time /time/mcp/ mcp:time",
     "answer /answer/mcp/ mcp:gemini"
 ]
+
+[machine]
+# Machine mode uses `container machine` with --home-mount none for persistent,
+# isolated containers. Unlike ephemeral mode (launch.sh), the host filesystem is
+# unreachable — the repo is cloned via GH_TOKEN/HTTPS and work flows back as git
+# pushes/PRs.
+#
+# IMPORTANT behavioral differences from ephemeral mode:
+#   - Uncommitted local work is NOT visible inside the machine (must push first)
+#   - Untracked files (e.g., .env) do NOT auto-arrive — inject via env vars
+#   - Machine persists across stop/start (~2s startup after first provision)
+#   - No SSH support — all git operations use GH_TOKEN/HTTPS
+#
+# Git identity fallback (used when host ~/.gitconfig has no user.name/email).
+# Machine mode cannot read host ~/.gitconfig (--home-mount none).
+git_user_name = ""
+git_user_email = ""
+
+# Machine VM resources (override [resources] for machine mode).
+# Precedence: CLI --memory/--cpus > [machine] memory/cpus > [resources] > defaults (4g, 4 CPUs).
+# If unset, falls back to [resources] values.
+# memory = "4g"
+# cpus = 4

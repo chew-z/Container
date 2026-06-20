@@ -59,6 +59,99 @@ BUILD_CPUS=4 BUILD_MEMORY=8g ./launch.sh --rebuild
 | `--config PATH` | Build config path (overrides layered resolution) |
 | `-- ARGS...` | Pass remaining arguments to claude |
 
+## Machine Mode (`machine-launch.sh`)
+
+Persistent, isolated containers using Apple's `container machine` with `--home-mount none`. Unlike ephemeral containers, machines survive stop/start cycles — tools, cloned repos, and Claude's session state persist across runs. Startup is ~2s after first provisioning.
+
+### First Run (Provisioning)
+
+```bash
+./machine-launch.sh                            # Provision + launch Claude
+./machine-launch.sh -C /path/to/project        # Specific project
+./machine-launch.sh --memory 8g --cpus 4       # Custom resources
+```
+
+1. Creates machine `claude-machine-<project-slug>` from `alpine:latest`
+2. Installs system packages (git, curl, ripgrep, etc.) via `apk`
+3. Downloads Claude Code binary (direct, no Node.js)
+4. Clones project repo via GH_TOKEN/HTTPS
+5. Configures git, registers MCP servers, renders CONTAINER.md
+6. Launches `claude` interactively
+
+### Subsequent Runs (Re-entry)
+
+```bash
+./machine-launch.sh                            # Detects existing machine, ~2s startup
+```
+
+1. Detects existing machine (checks provisioning sentinel)
+2. Runs `git fetch --all` to update remote refs (working tree preserved)
+3. Launches `claude` interactively
+
+### Key Differences from Ephemeral Mode
+
+| Aspect | Ephemeral (`launch.sh`) | Machine (`machine-launch.sh`) |
+|--------|------------------------|-------------------------------|
+| Lifecycle | Destroyed on exit | Persists across stop/start |
+| Startup | Image build + container create | ~2s (after first provision) |
+| Workspace | Copied from host mount | `git clone` inside machine |
+| Uncommitted work | Lost unless pushed | Preserved in machine filesystem |
+| Untracked files | Carried in (copy mode) | Must be injected manually |
+| SSH support | Copied but non-functional | Not supported |
+| Host filesystem | Read-only mounts | No access (`--home-mount none`) |
+| Work output | PR-based | PR-based (same) |
+| Base image | `claudecode-python`/`claudecode-golang` | `alpine:latest` |
+
+> **Important:** Uncommitted local work and untracked files (`.env`, etc.) do NOT auto-arrive in machine mode. You must commit + push before running, or inject secrets via env vars.
+
+> **Credential staleness:** Credentials (GH_TOKEN, OAuth token) are baked into the machine at provision time. If you rotate a token, run `--reprovision` to re-inject it — re-entry does not refresh credentials.
+
+### Command Reference
+
+| Flag | Description |
+|------|-------------|
+| `-C, --project PATH` | Project directory (default: `$PWD`) |
+| `--memory SIZE` | Machine VM memory (e.g., `4g`). Overrides config |
+| `--cpus N` | Machine VM CPUs. Overrides config |
+| `--reprovision` / `--reset` | Delete machine and re-create from scratch |
+| `--status` | Show machine state (exists, provisioned) and exit |
+| `--shell` | Drop into bash instead of launching Claude |
+| `-- ARGS...` | Pass remaining arguments to claude |
+
+### Machine Cleanup
+
+```bash
+./cleanup.sh --machines                    # List machines
+./cleanup.sh --machines --stop             # Stop all machines
+./cleanup.sh --machines --remove           # Delete all stopped machines
+./cleanup.sh --machines --prune            # Stop + delete all machines
+```
+
+### Manual Spike Validation (Phase 0)
+
+Before relying on machine mode, manually validate the core assumptions:
+
+```bash
+# 1. Create a machine with no host mount
+container machine create --home-mount none --name spike --arch arm64 alpine:latest
+
+# 2. Confirm host $HOME is NOT visible inside
+container machine run --name spike -- ls /Users   # expect: empty or absent
+
+# 3. Install Claude Code and verify it works
+container machine run --name spike --root -- sh -c \
+    'apk add --no-cache curl && curl -fsSL \
+    "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/$(curl -fsSL https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/latest)/linux-arm64/claude" \
+    -o /usr/local/bin/claude && chmod +x /usr/local/bin/claude && claude --version'
+
+# 4. Verify persistence across stop/start
+container machine stop spike
+container machine run --name spike -- claude --version   # expect: version persists
+
+# 5. Cleanup
+container machine delete spike
+```
+
 ### Environment Variables
 
 | Variable | Default | Description |
@@ -109,7 +202,7 @@ The container runs Linux arm64 but the host is macOS:
 
 ## Container Cleanup
 
-The `cleanup.sh` script manages containers (`claude-*`), images (`claudecode-*`), and builder cache.
+The `cleanup.sh` script manages containers (`claude-*`), machines (`claude-machine-*`), images (`claudecode-*`), and builder cache.
 
 ### Containers
 
@@ -119,6 +212,15 @@ The `cleanup.sh` script manages containers (`claude-*`), images (`claudecode-*`)
 | `./cleanup.sh --stop [NAME]` | Stop specific or all containers |
 | `./cleanup.sh --remove [NAME]` | Delete specific or all stopped containers |
 | `./cleanup.sh --prune` | Stop and delete all containers |
+
+### Machines
+
+| Command | Description |
+|---------|-------------|
+| `./cleanup.sh --machines` | List all `claude-machine-*` machines |
+| `./cleanup.sh --machines --stop [NAME]` | Stop a machine, or all if no name given |
+| `./cleanup.sh --machines --remove [NAME]` | Delete a machine, or all stopped |
+| `./cleanup.sh --machines --prune` | Stop and delete all machines |
 
 ### Images
 
@@ -138,7 +240,7 @@ The `cleanup.sh` script manages containers (`claude-*`), images (`claudecode-*`)
 
 | Command | Description |
 |---------|-------------|
-| `./cleanup.sh --full-cleanup` | Stop/remove all containers + delete images + clear builder cache |
+| `./cleanup.sh --full-cleanup` | Stop/remove all containers + machines + delete images + clear builder cache |
 | `./cleanup.sh --disk-usage` | Show container system disk usage |
 
 ### Rebuild Strategies

@@ -25,7 +25,7 @@ into how the repo and credentials get in, which is what this design covers.
 | `--home-mount none` severs host `$HOME` | ✅ Real & tested | `Sources/ContainerPersistence/MachineConfig.swift`; CLI test creates a machine with `--home-mount none` and asserts exit 0 |
 | Values are `ro` / `rw` / `none`, default `rw` | ✅ | `command-reference.md`: `--home-mount <home-mount>` |
 | Persistence across stop/start | ✅ | Machine filesystem is durable; only `machine rm` deletes storage |
-| Arbitrary `--mount` / `--volume` on machine | ❌ **Not supported** | `machine create` and `machine run` expose only: resources, `--home-mount`, `--env`/`--env-file`, user/uid/gid, `--workdir`, `--detach`, `--root`. No bind/volume flags. |
+| Arbitrary `--mount` / `--volume` on machine | ❌ **Not supported** | Neither `machine create` nor `machine run` expose bind/volume flags. `machine create` supports only: `--name`, `--cpus`, `--memory`, `--home-mount`, `--no-boot`, `--set-default`, arch/os/platform. `machine run` adds: `-e`/`--env`, `--env-file`, user/uid/gid, `--workdir`, `--detach`, `--root`. No bind/volume flags on either. |
 | `container cp` into a machine | ❌ Not applicable | `container cp` targets *containers* (`name:/path`), a different object class. No evidence it addresses machines. |
 | SSH agent socket forwarding | ❌ **Dropped** | Socket path `/var/host-services/ssh-auth.sock` appears in machine tests (`RuntimeService.swift`, `TestCLIMachine.swift`), but those almost certainly ran under default `rw`. Unconfirmed under `--home-mount none`. **Decision:** no SSH support in machine mode — GH_TOKEN/HTTPS covers all git operations. |
 | Host user mapping (uid/gid) | ✅ | `machine run` runs as a user matching the host account by default (`--root` to override) |
@@ -102,7 +102,7 @@ stateDiagram-v2
 | `--home-mount` | `rw` / `ro` / `none` | **`none`** | `none` = isolation preserved. `rw` = Apple's "edit on Mac, build inside" (defeats sandbox). |
 | Base image | any image with `/sbin/init` | `alpine:latest` | Debian slim lacks init. Custom image only if Alpine packaging proves limiting. |
 | Repo ingress | `git clone` / `tar` over stdin | `git clone` over **GH_TOKEN/HTTPS** | Clone on first boot; `git fetch` on re-entry (working tree preserved). |
-| Credentials | `--env-file` (GH_TOKEN, OAuth, MCP) | env-file (chmod 600) | Reuse the ephemeral-mode env-file pattern. **Never** mount Keychain in. `CLAUDE_CODE_OAUTH_TOKEN` (long-lived) eliminates token refresh. |
+| Credentials | `--env-file` on `machine run` (GH_TOKEN, OAuth, MCP) | env-file (chmod 600) at first `machine run` | **Not** `machine create` (which has no `--env-file`). Credentials are passed at the provisioning `machine run` call and persisted inside the machine filesystem for subsequent runs. Host-side env-file is ephemeral. **Never** mount Keychain in. `CLAUDE_CODE_OAUTH_TOKEN` (long-lived) eliminates token refresh. |
 | Persistence scope | per-project machine / shared | **per-project** (`claude-machine-<slug>`) | Avoids state bleed across projects (shared `$HOME` is exactly what we're avoiding). |
 | Idle teardown | TTL reaper / manual | manual `machine stop` | Optional reaper later; machines are cheap when stopped. |
 
